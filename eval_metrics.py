@@ -82,12 +82,11 @@ def eval_market1501(distmat, q_pids, g_pids, q_camids, g_camids, max_rank, img_n
         print("Note: number of gallery samples is quite small, got {}".format(num_g))
     indices = np.argsort(distmat, axis=1)
     matches = (g_pids[indices] == q_pids[:, np.newaxis]).astype(np.int32)
-    img_names = img_names[indices]
     print("q_pids", q_pids)
-    print("g_pids", g_pids)
+    # print("g_pids", g_pids)
     print("matches", matches)
     if img_names is not None:
-        print("img_names", img_names)
+        img_names = img_names[indices]
 
     # compute cmc curve for each query
     all_cmc = []
@@ -105,6 +104,8 @@ def eval_market1501(distmat, q_pids, g_pids, q_camids, g_camids, max_rank, img_n
 
         # compute cmc curve
         orig_cmc = matches[q_idx][keep] # binary vector, positions with value 1 are correct matches
+        print("matches*", orig_cmc)
+        print("img names*", img_names[q_idx][keep][:20])
         if not np.any(orig_cmc):
             # this condition is true when query identity does not appear in gallery
             continue
