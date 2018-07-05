@@ -387,9 +387,9 @@ class DukeMTMCreID(object):
         self._check_before_run()
 
         train, num_train_pids, num_train_imgs = self._process_dir(self.train_dir, relabel=True)
-        query, num_query_pids, num_query_imgs = self._process_dir(self.query_dir, relabel=False)
-        gallery, num_gallery_pids, num_gallery_imgs = self._process_dir(self.gallery_dir, relabel=False)
-        num_total_pids = num_train_pids + num_query_pids
+        query, _, num_query_imgs = self._process_dir(self.query_dir, relabel=False, get_pids=False)
+        gallery, _, num_gallery_imgs = self._process_dir(self.gallery_dir, relabel=False, get_pids=False)
+        num_total_pids = num_train_pids
         num_total_imgs = num_train_imgs + num_query_imgs + num_gallery_imgs
 
         print("=> DukeMTMC-reID loaded")
@@ -398,8 +398,8 @@ class DukeMTMCreID(object):
         print("  subset   | # ids | # images")
         print("  ------------------------------")
         print("  train    | {:5d} | {:8d}".format(num_train_pids, num_train_imgs))
-        print("  query    | {:5d} | {:8d}".format(num_query_pids, num_query_imgs))
-        print("  gallery  | {:5d} | {:8d}".format(num_gallery_pids, num_gallery_imgs))
+        print("  query    |       | {:8d}".format(num_query_imgs))
+        print("  gallery  |       | {:8d}".format(num_gallery_imgs))
         print("  ------------------------------")
         print("  total    | {:5d} | {:8d}".format(num_total_pids, num_total_imgs))
         print("  ------------------------------")
@@ -409,8 +409,8 @@ class DukeMTMCreID(object):
         self.gallery = gallery
 
         self.num_train_pids = num_train_pids
-        self.num_query_pids = num_query_pids
-        self.num_gallery_pids = num_gallery_pids
+        # self.num_query_pids = num_query_pids
+        # self.num_gallery_pids = num_gallery_pids
 
     def _check_before_run(self):
         """Check if all files are available before going deeper"""
@@ -423,7 +423,7 @@ class DukeMTMCreID(object):
         if not osp.exists(self.gallery_dir):
             raise RuntimeError("'{}' is not available".format(self.gallery_dir))
 
-    def _process_dir(self, dir_path, relabel=False):
+    def _process_dir(self, dir_path, relabel=False, get_pids=True):
         img_paths = glob.glob(osp.join(dir_path, '*.jpg'))
         pattern = re.compile(r'([-\d]+)_c(\d)')
 
@@ -441,7 +441,7 @@ class DukeMTMCreID(object):
             if relabel: pid = pid2label[pid]
             dataset.append((img_path, pid, camid))
 
-        num_pids = len(pid_container)
+        num_pids = len(pid_container) if get_pids else 0
         num_imgs = len(dataset)
         return dataset, num_pids, num_imgs
 
