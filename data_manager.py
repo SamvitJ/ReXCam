@@ -439,7 +439,7 @@ class DukeMTMCreID(object):
             assert 1 <= camid <= 8
             camid -= 1 # index starts from 0
             if relabel: pid = pid2label[pid]
-            dataset.append((img_path, pid, camid))
+            dataset.append((img_path, 0, camid))
 
         num_pids = len(pid_container) if get_pids else 0
         num_imgs = len(dataset)

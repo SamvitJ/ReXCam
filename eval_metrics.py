@@ -81,11 +81,12 @@ def eval_market1501(distmat, q_pids, g_pids, q_camids, g_camids, max_rank, img_n
         max_rank = num_g
         print("Note: number of gallery samples is quite small, got {}".format(num_g))
     indices = np.argsort(distmat, axis=1)
+    print("dist mat", np.sort(distmat))
     matches = (g_pids[indices] == q_pids[:, np.newaxis]).astype(np.int32)
     img_names = img_names[indices]
-    print("q_pids", q_pids)
-    print("g_pids", g_pids)
-    print("matches", matches)
+    # print("q_pids", q_pids)
+    # print("g_pids", g_pids)
+    # print("matches", matches)
     if img_names is not None:
         print("img_names", img_names)
 
