@@ -260,7 +260,7 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
 
         gf, g_pids, g_camids, g_fids, img_names = [], [], [], [], []
         end = time.time()
-        for batch_idx, (img_name, imgs, pids, camids, fids) in enumerate(galleryloader):
+        for batch_idx, (names, imgs, pids, camids, fids) in enumerate(galleryloader):
             if use_gpu: imgs = imgs.cuda()
 
             in_range = False
@@ -278,7 +278,7 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
             gf.append(features)
             g_pids.extend(pids)
             g_camids.extend(camids)
-            img_names.extend(img_name)
+            img_names.extend(names)
             g_fids.extend(fids)
         gf = torch.cat(gf, 0)
         g_pids = np.asarray(g_pids)
