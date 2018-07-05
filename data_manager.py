@@ -1693,9 +1693,9 @@ class DukeMTMCVidReID(object):
 
     def __init__(self, root='data', min_seq_len=0, **kwargs):
         self.dataset_dir = osp.join(root, self.dataset_dir)
-        self.train_dir = osp.join(self.dataset_dir, 'dukemtmc_videoReID/train_split')
-        self.query_dir = osp.join(self.dataset_dir, 'dukemtmc_videoReID/query_split')
-        self.gallery_dir = osp.join(self.dataset_dir, 'dukemtmc_videoReID/gallery_split')
+        self.train_dir = osp.join(self.dataset_dir, 'train')
+        self.query_dir = osp.join(self.dataset_dir, 'query')
+        self.gallery_dir = osp.join(self.dataset_dir, 'gallery')
         self.split_train_json_path = osp.join(self.dataset_dir, 'split_train.json')
         self.split_query_json_path = osp.join(self.dataset_dir, 'split_query.json')
         self.split_gallery_json_path = osp.join(self.dataset_dir, 'split_gallery.json')
@@ -1791,7 +1791,7 @@ class DukeMTMCVidReID(object):
                         continue
                     img_paths.append(res[0])
                 img_name = osp.basename(img_paths[0])
-                camid = int(img_name[5]) - 1 # index-0
+                camid = int(img_name[6]) - 1 # index-0
                 img_paths = tuple(img_paths)
                 tracklets.append((img_paths, pid, camid))
 
