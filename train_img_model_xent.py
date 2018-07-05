@@ -238,7 +238,7 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
     model.eval()
 
     with torch.no_grad():
-        qf, q_pids, q_camids = [], [], []
+        qf, q_pids, q_camids, q_fids = [], [], [], []
         for batch_idx, (_, imgs, pids, camids, fids) in enumerate(queryloader):
             if use_gpu: imgs = imgs.cuda()
 
@@ -250,16 +250,25 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
             qf.append(features)
             q_pids.extend(pids)
             q_camids.extend(camids)
+            q_fids.extend(fids)
         qf = torch.cat(qf, 0)
         q_pids = np.asarray(q_pids)
         q_camids = np.asarray(q_camids)
+        q_fids = np.asarray(q_fids)
 
         print("Extracted features for query set, obtained {}-by-{} matrix".format(qf.size(0), qf.size(1)))
 
-        gf, g_pids, g_camids, img_names = [], [], [], []
+        gf, g_pids, g_camids, g_fids, img_names = [], [], [], [], []
         end = time.time()
         for batch_idx, (img_name, imgs, pids, camids, fids) in enumerate(galleryloader):
             if use_gpu: imgs = imgs.cuda()
+
+            in_range = False
+            for q_fid in q_fids:
+                if q_fid > fids[0] and q_fid < (fids[0] + 60*60):
+                    in_range = True
+            if not in_range:
+                continue
 
             end = time.time()
             features = model(imgs)
@@ -270,10 +279,12 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
             g_pids.extend(pids)
             g_camids.extend(camids)
             img_names.extend(img_name)
+            g_fids.extend(fids)
         gf = torch.cat(gf, 0)
         g_pids = np.asarray(g_pids)
         g_camids = np.asarray(g_camids)
         img_names = np.asarray(img_names)
+        g_fids = np.asarray(g_fids)
         # print(img_names)
 
         print("Extracted features for gallery set, obtained {}-by-{} matrix".format(gf.size(0), gf.size(1)))

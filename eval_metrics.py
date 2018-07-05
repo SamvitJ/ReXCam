@@ -86,6 +86,8 @@ def eval_market1501(distmat, q_pids, g_pids, q_camids, g_camids, max_rank, img_n
     print("q_pids", q_pids)
     print("g_pids", g_pids)
     print("matches", matches)
+    print("q_fids", q_fids)
+    print("g_fids", g_fids)
     if img_names is not None:
         print("img_names", img_names)
 
