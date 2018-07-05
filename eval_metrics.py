@@ -72,7 +72,7 @@ def eval_cuhk03(distmat, q_pids, g_pids, q_camids, g_camids, max_rank, N=100):
 
     return all_cmc, mAP
 
-def eval_market1501(distmat, q_pids, g_pids, q_camids, g_camids, max_rank):
+def eval_market1501(distmat, q_pids, g_pids, q_camids, g_camids, max_rank, img_names=None):
     """Evaluation with market1501 metric
     Key: for each query identity, its gallery images from the same camera view are discarded.
     """
@@ -82,9 +82,12 @@ def eval_market1501(distmat, q_pids, g_pids, q_camids, g_camids, max_rank):
         print("Note: number of gallery samples is quite small, got {}".format(num_g))
     indices = np.argsort(distmat, axis=1)
     matches = (g_pids[indices] == q_pids[:, np.newaxis]).astype(np.int32)
+    img_names = img_names[indices]
     print("q_pids", q_pids)
     print("g_pids", g_pids)
     print("matches", matches)
+    if img_names is not None:
+        print("img_names", img_names)
 
     # compute cmc curve for each query
     all_cmc = []
@@ -129,8 +132,8 @@ def eval_market1501(distmat, q_pids, g_pids, q_camids, g_camids, max_rank):
 
     return all_cmc, mAP
 
-def evaluate(distmat, q_pids, g_pids, q_camids, g_camids, max_rank=50, use_metric_cuhk03=False):
+def evaluate(distmat, q_pids, g_pids, q_camids, g_camids, max_rank=50, use_metric_cuhk03=False, img_names=None):
     if use_metric_cuhk03:
         return eval_cuhk03(distmat, q_pids, g_pids, q_camids, g_camids, max_rank)
     else:
-        return eval_market1501(distmat, q_pids, g_pids, q_camids, g_camids, max_rank)
+        return eval_market1501(distmat, q_pids, g_pids, q_camids, g_camids, max_rank, img_names)
