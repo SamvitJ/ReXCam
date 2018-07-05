@@ -36,7 +36,8 @@ class ImageDataset(Dataset):
         img = read_image(img_path)
         if self.transform is not None:
             img = self.transform(img)
-        return img, pid, camid
+        _, img_name = os.path.split(img_path)
+        return img_name, img, pid, camid
 
 class VideoDataset(Dataset):
     """Video Person ReID Dataset.
