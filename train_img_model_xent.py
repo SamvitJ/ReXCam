@@ -239,7 +239,7 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
 
     with torch.no_grad():
         qf, q_pids, q_camids = [], [], []
-        for batch_idx, (_, imgs, pids, camids) in enumerate(queryloader):
+        for batch_idx, (_, imgs, pids, camids, fids) in enumerate(queryloader):
             if use_gpu: imgs = imgs.cuda()
 
             end = time.time()
@@ -258,7 +258,7 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
 
         gf, g_pids, g_camids, img_names = [], [], [], []
         end = time.time()
-        for batch_idx, (img_name, imgs, pids, camids) in enumerate(galleryloader):
+        for batch_idx, (img_name, imgs, pids, camids, fids) in enumerate(galleryloader):
             if use_gpu: imgs = imgs.cuda()
 
             end = time.time()

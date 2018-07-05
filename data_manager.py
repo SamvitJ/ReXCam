@@ -425,21 +425,21 @@ class DukeMTMCreID(object):
 
     def _process_dir(self, dir_path, relabel=False):
         img_paths = glob.glob(osp.join(dir_path, '*.jpg'))
-        pattern = re.compile(r'([-\d]+)_c(\d)')
+        pattern = re.compile(r'([-\d]+)_c(\d)_f(\d)')
 
         pid_container = set()
         for img_path in img_paths:
-            pid, _ = map(int, pattern.search(img_path).groups())
+            pid, _, _ = map(int, pattern.search(img_path).groups())
             pid_container.add(pid)
         pid2label = {pid:label for label, pid in enumerate(pid_container)}
 
         dataset = []
         for img_path in img_paths:
-            pid, camid = map(int, pattern.search(img_path).groups())
+            pid, camid, fid = map(int, pattern.search(img_path).groups())
             assert 1 <= camid <= 8
             camid -= 1 # index starts from 0
             if relabel: pid = pid2label[pid]
-            dataset.append((img_path, pid, camid))
+            dataset.append((img_path, pid, camid, fid))
 
         num_pids = len(pid_container)
         num_imgs = len(dataset)
