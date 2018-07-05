@@ -82,6 +82,9 @@ def eval_market1501(distmat, q_pids, g_pids, q_camids, g_camids, max_rank):
         print("Note: number of gallery samples is quite small, got {}".format(num_g))
     indices = np.argsort(distmat, axis=1)
     matches = (g_pids[indices] == q_pids[:, np.newaxis]).astype(np.int32)
+    print("q_pids", q_pids)
+    print("g_pids", g_pids)
+    print("matches", matches)
 
     # compute cmc curve for each query
     all_cmc = []
