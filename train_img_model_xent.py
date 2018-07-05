@@ -237,6 +237,8 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
     
     model.eval()
 
+    cam_offsets = [5542, 3606, 27243, 31181, 0, 22401, 18967, 46765]
+
     with torch.no_grad():
         qf, q_pids, q_camids, q_fids = [], [], [], []
         for batch_idx, (_, imgs, pids, camids, fids) in enumerate(queryloader):
@@ -245,12 +247,12 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
             end = time.time()
             features = model(imgs)
             batch_time.update(time.time() - end)
-            
+
             features = features.data.cpu()
             qf.append(features)
             q_pids.extend(pids)
             q_camids.extend(camids)
-            q_fids.extend(fids)
+            q_fids.extend(fids + torch.LongTensor([cam_offsets[cid] for cid in camids]))
         qf = torch.cat(qf, 0)
         q_pids = np.asarray(q_pids)
         q_camids = np.asarray(q_camids)
@@ -263,12 +265,21 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
         for batch_idx, (names, imgs, pids, camids, fids) in enumerate(galleryloader):
             if use_gpu: imgs = imgs.cuda()
 
-            in_range = False
-            for q_fid in q_fids:
-                if q_fid > fids[0] and q_fid < (fids[0] + 60*60):
-                    in_range = True
-            if not in_range:
+            valid_idxs = []
+            for idx, fid in enumerate(fids):
+                for q_fid in q_fids:
+                    # gallery fid must be in [t(q_fid), t(q_fid) + 1 min]
+                    if fid >= q_fid and fid < (q_fid + 60*60):
+                        valid_idxs.append(idx)
+                        break
+            if len(valid_idxs) == 0:
                 continue
+
+            names = [names[i] for i in valid_idxs]
+            imgs = torch.index_select(imgs, 0, torch.cuda.LongTensor(valid_idxs))
+            pids = torch.index_select(pids, 0, torch.LongTensor(valid_idxs))
+            camids = [camids[i] for i in valid_idxs]
+            fids = torch.index_select(fids, 0, torch.LongTensor(valid_idxs))
 
             end = time.time()
             features = model(imgs)
@@ -279,13 +290,14 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
             g_pids.extend(pids)
             g_camids.extend(camids)
             img_names.extend(names)
-            g_fids.extend(fids)
+            g_fids.extend(fids + torch.LongTensor([cam_offsets[cid] for cid in camids]))
         gf = torch.cat(gf, 0)
         g_pids = np.asarray(g_pids)
         g_camids = np.asarray(g_camids)
         img_names = np.asarray(img_names)
         g_fids = np.asarray(g_fids)
         # print(img_names)
+        print("new gallery size", len(gf))
 
         print("Extracted features for gallery set, obtained {}-by-{} matrix".format(gf.size(0), gf.size(1)))
 
