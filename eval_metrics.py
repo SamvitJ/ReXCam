@@ -82,9 +82,8 @@ def eval_market1501(distmat, q_pids, g_pids, q_camids, g_camids, max_rank, img_n
         print("Note: number of gallery samples is quite small, got {}".format(num_g))
     indices = np.argsort(distmat, axis=1)
     matches = (g_pids[indices] == q_pids[:, np.newaxis]).astype(np.int32)
-    print("q_pids", q_pids)
+    # print("q_pids", q_pids)
     # print("g_pids", g_pids)
-    print("matches", matches)
     if img_names is not None:
         img_names = img_names[indices]
 
@@ -93,6 +92,8 @@ def eval_market1501(distmat, q_pids, g_pids, q_camids, g_camids, max_rank, img_n
     all_AP = []
     num_valid_q = 0. # number of valid query
     for q_idx in range(num_q):
+        print("matches", matches[q_idx])
+
         # get query pid and camid
         q_pid = q_pids[q_idx]
         q_camid = q_camids[q_idx]
@@ -104,8 +105,8 @@ def eval_market1501(distmat, q_pids, g_pids, q_camids, g_camids, max_rank, img_n
 
         # compute cmc curve
         orig_cmc = matches[q_idx][keep] # binary vector, positions with value 1 are correct matches
-        print("matches*", orig_cmc)
-        print("img names*", img_names[q_idx][keep][:20])
+        # print("matches*", orig_cmc)
+        # print("img names*", img_names[q_idx][keep][:20])
         if not np.any(orig_cmc):
             # this condition is true when query identity does not appear in gallery
             continue
@@ -125,13 +126,10 @@ def eval_market1501(distmat, q_pids, g_pids, q_camids, g_camids, max_rank, img_n
         AP = tmp_cmc.sum() / num_rel
         all_AP.append(AP)
 
-    assert num_valid_q > 0, "Error: all query identities do not appear in gallery"
+    # assert num_valid_q > 0, "Error: all query identities do not appear in gallery"
 
-    all_cmc = np.asarray(all_cmc).astype(np.float32)
-    all_cmc = all_cmc.sum(0) / num_valid_q
-    mAP = np.mean(all_AP)
+    return all_cmc, all_AP, num_valid_q
 
-    return all_cmc, mAP
 
 def evaluate(distmat, q_pids, g_pids, q_camids, g_camids, max_rank=50, use_metric_cuhk03=False, img_names=None):
     if use_metric_cuhk03:

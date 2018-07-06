@@ -268,66 +268,100 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
 
         print("Extracted features for query set, obtained {}-by-{} matrix".format(qf.size(0), qf.size(1)))
 
-        gf, g_pids, g_camids, g_fids, g_names = [], [], [], [], []
-        end = time.time()
-        for batch_idx, (names, imgs, pids, camids, fids) in enumerate(galleryloader):
-            if use_gpu: imgs = imgs.cuda()
+    all_cmc = []
+    all_AP = []
+    num_valid_q = 0.
+    img_seen = 0
+    img_elim = 0
+    for q_idx, (q_pid, q_camid, q_fid, q_name) in enumerate(zip(q_pids, q_camids, q_fids, q_names)):
 
-            fids += torch.LongTensor([cam_offsets[cid] for cid in camids])
+        print("\nquery id: ", q_idx, "pid: ", q_pid, "camid: ", q_camid,
+            "frameid: ", q_fid, "name: ", q_name)
 
-            valid_idxs = []
-            for idx, fid in enumerate(fids):
-                for q_fid, q_camid in zip(q_fids, q_camids):
-                    # gallery fid must be in [t(q_fid), t(q_fid) + 1 min]
-                    if fid.numpy() >= q_fid and fid.numpy() < (q_fid + 60*60*2) and camids[idx] in corr_matrix[q_camid]:
-                        # print("pair", q_fid, fid.numpy())
-                        valid_idxs.append(idx)
-                        break
-            if len(valid_idxs) == 0:
-                continue
-
-            names = [names[i] for i in valid_idxs]
-            imgs = torch.index_select(imgs, 0, torch.cuda.LongTensor(valid_idxs))
-            pids = torch.index_select(pids, 0, torch.LongTensor(valid_idxs))
-            camids = [camids[i] for i in valid_idxs]
-            fids = torch.index_select(fids, 0, torch.LongTensor(valid_idxs))
-
+        with torch.no_grad():
+            gf, g_pids, g_camids, g_fids, g_names = [], [], [], [], []
             end = time.time()
-            features = model(imgs)
-            batch_time.update(time.time() - end)
+            ctr = 0
+            for batch_idx, (names, imgs, pids, camids, fids) in enumerate(galleryloader):
+                if use_gpu: imgs = imgs.cuda()
 
-            features = features.data.cpu()
-            gf.append(features)
-            g_pids.extend(pids)
-            g_camids.extend(camids)
-            g_names.extend(names)
-            g_fids.extend(fids)
-        gf = torch.cat(gf, 0)
-        g_pids = np.asarray(g_pids)
-        g_camids = np.asarray(g_camids)
-        g_names = np.asarray(g_names)
-        g_fids = np.asarray(g_fids)
-        # print(img_names)
-        print("new gallery size", len(gf))
+                fids += torch.LongTensor([cam_offsets[cid] for cid in camids])
 
-        print("Extracted features for gallery set, obtained {}-by-{} matrix".format(gf.size(0), gf.size(1)))
+                valid_idxs = []
+                for idx, fid in enumerate(fids):
+                    # gallery fid must be in [t(q_fid), t(q_fid) + 1 min]
+                    if fid.numpy() >= q_fid and fid.numpy() < (q_fid + 60*60*2):
+                        if camids[idx] in corr_matrix[q_camid]:
+                            # print("pair", q_fid, fid.numpy())
+                            valid_idxs.append(idx)
+                        else:
+                            # print(q_camid, camids[idx], corr_matrix[q_camid])
+                            ctr += 1
+                if len(valid_idxs) == 0:
+                    continue
 
-    print("==> BatchTime(s)/BatchSize(img): {:.3f}/{}".format(batch_time.avg, args.test_batch))
+                names = [names[i] for i in valid_idxs]
+                imgs = torch.index_select(imgs, 0, torch.cuda.LongTensor(valid_idxs))
+                pids = torch.index_select(pids, 0, torch.LongTensor(valid_idxs))
+                camids = [camids[i] for i in valid_idxs]
+                fids = torch.index_select(fids, 0, torch.LongTensor(valid_idxs))
 
-    print("q_fids", q_fids)
-    # print("g_fids", g_fids)
+                end = time.time()
+                features = model(imgs)
+                batch_time.update(time.time() - end)
 
-    m, n = qf.size(0), gf.size(0)
-    distmat = torch.pow(qf, 2).sum(dim=1, keepdim=True).expand(m, n) + \
-              torch.pow(gf, 2).sum(dim=1, keepdim=True).expand(n, m).t()
-    distmat.addmm_(1, -2, qf, gf.t())
-    distmat = distmat.numpy()
-    # print(distmat)
+                features = features.data.cpu()
+                gf.append(features)
+                g_pids.extend(pids)
+                g_camids.extend(camids)
+                g_names.extend(names)
+                g_fids.extend(fids)
+            gf = torch.cat(gf, 0)
+            g_pids = np.asarray(g_pids)
+            g_camids = np.asarray(g_camids)
+            g_names = np.asarray(g_names)
+            g_fids = np.asarray(g_fids)
+            # print(img_names)
+            print("eliminated: ", ctr)
+            print("new gallery size: ", len(gf))
+            img_seen += len(gf)
+            img_elim += ctr
 
-    print("Computing CMC and mAP")
-    cmc, mAP = evaluate(distmat, q_pids, g_pids, q_camids, g_camids, use_metric_cuhk03=args.use_metric_cuhk03, img_names=g_names)
+            print("Extracted features for gallery set, obtained {}-by-{} matrix".format(gf.size(0), gf.size(1)))
+
+        print("==> BatchTime(s)/BatchSize(img): {:.3f}/{}".format(batch_time.avg, args.test_batch))
+
+        # print("q_fids", q_fids)
+        # print("g_fids", g_fids)
+
+        qf_i = qf[q_idx].unsqueeze(0)
+
+        m, n = qf_i.size(0), gf.size(0)
+        distmat = torch.pow(qf_i, 2).sum(dim=1, keepdim=True).expand(m, n) + \
+                  torch.pow(gf, 2).sum(dim=1, keepdim=True).expand(n, m).t()
+        distmat.addmm_(1, -2, qf_i, gf.t())
+        distmat = distmat.numpy()
+        # print(distmat)
+
+        print("Computing CMC and mAP")
+        q_pid = np.expand_dims(q_pids[q_idx], axis=0)
+        q_camid = np.expand_dims(q_camids[q_idx], axis=0)
+        cmc, AP, valid = evaluate(distmat, q_pid, g_pids, q_camid, g_camids, use_metric_cuhk03=args.use_metric_cuhk03, img_names=g_names)
+
+        if valid == 1:
+            all_cmc.append(cmc[0])
+            all_AP.append(AP[0])
+            num_valid_q += valid
+
+        print("mAP (cum): {:.1%}".format(np.mean(all_AP)))
+
+    all_cmc = np.asarray(all_cmc).astype(np.float32)
+    cmc = all_cmc.sum(0) / num_valid_q
+    mAP = np.mean(all_AP)
 
     print("Results ----------")
+    print("img seen: {}".format(img_seen))
+    print("img tot:  {}".format(img_seen + img_elim))
     print("mAP: {:.1%}".format(mAP))
     print("CMC curve")
     for r in ranks:
