@@ -72,7 +72,8 @@ def eval_cuhk03(distmat, q_pids, g_pids, q_camids, g_camids, max_rank, N=100):
 
     return all_cmc, mAP
 
-def eval_market1501(distmat, q_pids, g_pids, q_camids, g_camids, max_rank, img_names=None):
+def eval_market1501(distmat, q_pids, g_pids, q_camids, g_camids, max_rank,
+        img_names=None, g_a_pids=None, g_a_camids=None):
     """Evaluation with market1501 metric
     Key: for each query identity, its gallery images from the same camera view are discarded.
     """
@@ -82,6 +83,7 @@ def eval_market1501(distmat, q_pids, g_pids, q_camids, g_camids, max_rank, img_n
         print("Note: number of gallery samples is quite small, got {}".format(num_g))
     indices = np.argsort(distmat, axis=1)
     matches = (g_pids[indices] == q_pids[:, np.newaxis]).astype(np.int32)
+    print("all matches:", np.sum(matches))
     # print("q_pids", q_pids)
     # print("g_pids", g_pids)
     if img_names is not None:
@@ -91,6 +93,9 @@ def eval_market1501(distmat, q_pids, g_pids, q_camids, g_camids, max_rank, img_n
     all_cmc = []
     all_AP = []
     num_valid_q = 0. # number of valid query
+    tot_found = 0
+    tot_pres = 0
+
     for q_idx in range(num_q):
         print("matches", matches[q_idx])
 
@@ -102,6 +107,16 @@ def eval_market1501(distmat, q_pids, g_pids, q_camids, g_camids, max_rank, img_n
         order = indices[q_idx]
         remove = (g_pids[order] == q_pid) & (g_camids[order] == q_camid)
         keep = np.invert(remove)
+
+        par_matches = [(g_pids[i]   == q_pid) and (g_camids[i]   != q_camid) for i in range(len(g_pids))]
+        all_matches = [(g_a_pids[i] == q_pid) and (g_a_camids[i] != q_camid) for i in range(len(g_a_pids))]
+
+        num_found = np.sum(par_matches)
+        num_pres  = np.sum(all_matches)
+
+        print("found:", num_found, "present:", num_pres)
+        tot_found += num_found
+        tot_pres  += num_pres
 
         # compute cmc curve
         orig_cmc = matches[q_idx][keep] # binary vector, positions with value 1 are correct matches
@@ -123,16 +138,18 @@ def eval_market1501(distmat, q_pids, g_pids, q_camids, g_camids, max_rank, img_n
         tmp_cmc = orig_cmc.cumsum()
         tmp_cmc = [x / (i+1.) for i, x in enumerate(tmp_cmc)]
         tmp_cmc = np.asarray(tmp_cmc) * orig_cmc
-        AP = tmp_cmc.sum() / num_rel
+        AP = tmp_cmc.sum() / num_pres
         all_AP.append(AP)
 
     # assert num_valid_q > 0, "Error: all query identities do not appear in gallery"
 
-    return all_cmc, all_AP, num_valid_q
+    return all_cmc, all_AP, num_valid_q, tot_found, tot_pres
 
 
-def evaluate(distmat, q_pids, g_pids, q_camids, g_camids, max_rank=50, use_metric_cuhk03=False, img_names=None):
+def evaluate(distmat, q_pids, g_pids, q_camids, g_camids, max_rank=50, use_metric_cuhk03=False,
+        img_names=None, g_a_pids=None, g_a_camids=None):
     if use_metric_cuhk03:
         return eval_cuhk03(distmat, q_pids, g_pids, q_camids, g_camids, max_rank)
     else:
-        return eval_market1501(distmat, q_pids, g_pids, q_camids, g_camids, max_rank, img_names)
+        return eval_market1501(distmat, q_pids, g_pids, q_camids, g_camids, max_rank,
+            img_names=img_names, g_a_pids=g_a_pids, g_a_camids=g_a_camids)

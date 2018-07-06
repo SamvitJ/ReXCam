@@ -273,6 +273,8 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
     num_valid_q = 0.
     img_seen = 0
     img_elim = 0
+    tot_found = 0
+    tot_pres = 0
     for q_idx, (q_pid, q_camid, q_fid, q_name) in enumerate(zip(q_pids, q_camids, q_fids, q_names)):
 
         print("\nquery id: ", q_idx, "pid: ", q_pid, "camid: ", q_camid,
@@ -280,6 +282,7 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
 
         with torch.no_grad():
             gf, g_pids, g_camids, g_fids, g_names = [], [], [], [], []
+            g_a_pids, g_a_camids = [], []
             end = time.time()
             ctr = 0
             for batch_idx, (names, imgs, pids, camids, fids) in enumerate(galleryloader):
@@ -292,11 +295,11 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
                     # gallery fid must be in [t(q_fid), t(q_fid) + 1 min]
                     if fid.numpy() >= q_fid and fid.numpy() < (q_fid + 60*60*2):
                         if camids[idx] in corr_matrix[q_camid]:
-                            # print("pair", q_fid, fid.numpy())
                             valid_idxs.append(idx)
                         else:
-                            # print(q_camid, camids[idx], corr_matrix[q_camid])
                             ctr += 1
+                        g_a_pids.append(pids[idx])
+                        g_a_camids.append(camids[idx])
                 if len(valid_idxs) == 0:
                     continue
 
@@ -317,6 +320,8 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
                 g_names.extend(names)
                 g_fids.extend(fids)
             gf = torch.cat(gf, 0)
+            g_a_pids = np.asarray(g_a_pids)
+            g_a_camids = np.asarray(g_a_camids)
             g_pids = np.asarray(g_pids)
             g_camids = np.asarray(g_camids)
             g_names = np.asarray(g_names)
@@ -346,14 +351,21 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
         print("Computing CMC and mAP")
         q_pid = np.expand_dims(q_pids[q_idx], axis=0)
         q_camid = np.expand_dims(q_camids[q_idx], axis=0)
-        cmc, AP, valid = evaluate(distmat, q_pid, g_pids, q_camid, g_camids, use_metric_cuhk03=args.use_metric_cuhk03, img_names=g_names)
+        cmc, AP, valid, f, p = evaluate(distmat, q_pid, g_pids, q_camid, g_camids, use_metric_cuhk03=args.use_metric_cuhk03,
+            img_names=g_names, g_a_pids=g_a_pids, g_a_camids=g_a_camids)
 
         if valid == 1:
             all_cmc.append(cmc[0])
             all_AP.append(AP[0])
             num_valid_q += valid
+            tot_found += f
+            tot_pres += p
 
-        print("mAP (cum): {:.1%}".format(np.mean(all_AP)))
+        print("mAP (so far): {:.1%}".format(np.mean(all_AP)))
+        print("img seen (so far): {}".format(img_seen))
+        print("img tot. (so far): {}".format(img_seen + img_elim))
+        print("matches found (so far): {}".format(tot_found))
+        print("matches pres. (so far): {}".format(tot_pres))
 
     all_cmc = np.asarray(all_cmc).astype(np.float32)
     cmc = all_cmc.sum(0) / num_valid_q
@@ -362,6 +374,8 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
     print("Results ----------")
     print("img seen: {}".format(img_seen))
     print("img tot:  {}".format(img_seen + img_elim))
+    print("matches found: {}".format(tot_found))
+    print("matches pres.: {}".format(tot_pres))
     print("mAP: {:.1%}".format(mAP))
     print("CMC curve")
     for r in ranks:
