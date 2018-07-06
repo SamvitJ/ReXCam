@@ -238,6 +238,9 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
     model.eval()
 
     cam_offsets = [5542, 3606, 27243, 31181, 0, 22401, 18967, 46765]
+    corr_matrix = [[1, 4, 7], [0, 2, 4, 7], [1, 3, 4],
+        [2, 4], [0, 1, 2, 3, 5, 6, 7], [4, 6],
+        [4, 5, 7], [0, 1, 4, 6]]
 
     with torch.no_grad():
         qf, q_pids, q_camids, q_fids, q_names = [], [], [], [], []
@@ -274,9 +277,9 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
 
             valid_idxs = []
             for idx, fid in enumerate(fids):
-                for q_fid in q_fids:
+                for q_fid, q_camid in zip(q_fids, q_camids):
                     # gallery fid must be in [t(q_fid), t(q_fid) + 1 min]
-                    if fid.numpy() >= q_fid and fid.numpy() < (q_fid + 60*60*2):
+                    if fid.numpy() >= q_fid and fid.numpy() < (q_fid + 60*60*2) and camids[idx] in corr_matrix[q_camid]:
                         # print("pair", q_fid, fid.numpy())
                         valid_idxs.append(idx)
                         break
