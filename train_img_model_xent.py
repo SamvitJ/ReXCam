@@ -293,7 +293,7 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
                 valid_idxs = []
                 for idx, fid in enumerate(fids):
                     # gallery fid must be in [t(q_fid), t(q_fid) + 1 min]
-                    if fid.numpy() >= q_fid and fid.numpy() < (q_fid + 60*60*2):
+                    if fid.numpy() >= q_fid and fid.numpy() < (q_fid + 60*60*0.5):
                         if camids[idx] in corr_matrix[q_camid]:
                             valid_idxs.append(idx)
                         else:
