@@ -264,7 +264,6 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
     f_rate = 60.
     t_search_win = f_rate * 2.
     dist_thresh = 160.
-    check_all_cams = False
 
     cam_offsets = [5542, 3606, 27243, 31181, 0, 22401, 18967, 46765]
     corr_matrix = [[0, 1, 4, 7], [0, 1, 2, 4, 7], [1, 2, 3, 4],
@@ -328,10 +327,8 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
                 for idx, fid in enumerate(fids):
                     # gallery fid must be in [t(q_fid), t(q_fid) + 1 min]
                     if fid.numpy() > q_fid and fid.numpy() <= (q_fid + t_search_win):
-                        if check_all_cams or (camids[idx] in corr_matrix[q_camid]):
-                            valid_idxs.append(idx)
-                        else:
-                            ctr += 1
+                        valid_idxs.append(idx)
+
                         g_a_pids.append(pids[idx])
                         g_a_camids.append(camids[idx])
                 if len(valid_idxs) == 0:
@@ -407,17 +404,12 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
             if t_search_win == f_rate * 128.:
                 print("could not find person!")
                 break
-            # set flag, extend window
-            if not check_all_cams and t_search_win == f_rate * 32.:
-                print("now checking all cameras!")
-                check_all_cams = True
-            else:
-                t_search_win *= 4.0
+            # extend window
+            t_search_win *= 4.0
         else:
             print("match declared:", distmat[0][indices[0][0]])
-            # reset window, flag
+            # reset window
             t_search_win = f_rate * 2.
-            check_all_cams = False
 
             # find next query img
             q_idx += 1
