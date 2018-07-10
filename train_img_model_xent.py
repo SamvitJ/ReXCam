@@ -261,9 +261,10 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
     
     model.eval()
 
-    frame_rate = 60.
-    t_search_window = frame_rate * 2.
+    f_rate = 60.
+    t_search_win = f_rate * 2.
     dist_thresh = 160.
+    check_all_cams = False
 
     cam_offsets = [5542, 3606, 27243, 31181, 0, 22401, 18967, 46765]
     corr_matrix = [[0, 1, 4, 7], [0, 1, 2, 4, 7], [1, 2, 3, 4],
@@ -311,7 +312,7 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
     # for q_idx, (q_pid, q_camid, q_fid, q_name) in enumerate(zip(q_pids, q_camids, q_fids, q_names)):
     while q_idx >= 0:
         print("\nquery id: ", q_idx, "pid: ", q_pid, "camid: ", q_camid,
-            "frameid: ", q_fid, "name: ", q_name, "\twindow (sec):", t_search_window / frame_rate)
+            "frameid: ", q_fid, "name: ", q_name, "\twindow (sec):", t_search_win / f_rate)
 
         with torch.no_grad():
             gf, g_pids, g_camids, g_fids, g_names = [], [], [], [], []
@@ -326,8 +327,8 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
                 valid_idxs = []
                 for idx, fid in enumerate(fids):
                     # gallery fid must be in [t(q_fid), t(q_fid) + 1 min]
-                    if fid.numpy() > q_fid and fid.numpy() <= (q_fid + t_search_window):
-                        if camids[idx] in corr_matrix[q_camid]:
+                    if fid.numpy() > q_fid and fid.numpy() <= (q_fid + t_search_win):
+                        if check_all_cams or (camids[idx] in corr_matrix[q_camid]):
                             valid_idxs.append(idx)
                         else:
                             ctr += 1
@@ -402,12 +403,20 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
         indices = np.argsort(distmat, axis=1)
         if distmat[0][indices[0][0]] > dist_thresh:
             print("not close enough, waiting...", distmat[0][indices[0][0]])
-            # extend window
-            t_search_window *= 2.0
+            # extend window, set flag
+            t_search_win *= 4.0
+            if t_search_win == f_rate * 128.:
+                print("now checking all cameras!")
+                check_all_cams = True
+            # check exit condition
+            if t_search_win == f_rate * 512.:
+                print("could not find person!")
+                break
         else:
             print("match declared:", distmat[0][indices[0][0]])
-            # reset window
-            t_search_window = frame_rate * 2.
+            # reset window, flag
+            t_search_win = f_rate * 2.
+            check_all_cams = False
 
             # find next query img
             q_idx += 1
@@ -416,7 +425,6 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
             q_fid = g_fids[indices][0][0]
             q_name = g_names[indices][0][0]
             print("Next query (name, pid, cid, fid): ", q_name, q_pid, q_camid, q_fid)
-
             # extract next img features
             next_path = osp.normpath("data/dukemtmc-reid/DukeMTMC-reID/bounding_box_test/" + q_name)
             next_img = read_image(next_path)
