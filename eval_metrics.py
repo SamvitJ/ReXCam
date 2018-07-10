@@ -103,13 +103,9 @@ def eval_market1501(distmat, q_pids, g_pids, q_camids, g_camids, max_rank,
         q_pid = q_pids[q_idx]
         q_camid = q_camids[q_idx]
 
-        # remove gallery samples that have the same pid and camid with query
-        order = indices[q_idx]
-        remove = (g_pids[order] == q_pid) & (g_camids[order] == q_camid)
-        keep = np.invert(remove)
-
-        par_matches = [(g_pids[i]   == q_pid) and (g_camids[i]   != q_camid) for i in range(len(g_pids))]
-        all_matches = [(g_a_pids[i] == q_pid) and (g_a_camids[i] != q_camid) for i in range(len(g_a_pids))]
+        # check frac of matches retained
+        par_matches = [(g_pids[i]   == q_pid) for i in range(len(g_pids))]
+        all_matches = [(g_a_pids[i] == q_pid) for i in range(len(g_a_pids))]
 
         num_found = np.sum(par_matches)
         num_pres  = np.sum(all_matches)
@@ -118,8 +114,13 @@ def eval_market1501(distmat, q_pids, g_pids, q_camids, g_camids, max_rank,
         tot_found += num_found
         tot_pres  += num_pres
 
+        # # remove gallery samples that have the same pid and camid with query
+        # order = indices[q_idx]
+        # remove = (g_pids[order] == q_pid) & (g_camids[order] == q_camid)
+        # keep = np.invert(remove)
+
         # compute cmc curve
-        orig_cmc = matches[q_idx][keep] # binary vector, positions with value 1 are correct matches
+        orig_cmc = matches[q_idx] # binary vector, positions with value 1 are correct matches
         # print("matches*", orig_cmc)
         # print("img names*", img_names[q_idx][keep][:20])
         if not np.any(orig_cmc):
@@ -135,6 +136,7 @@ def eval_market1501(distmat, q_pids, g_pids, q_camids, g_camids, max_rank,
         # compute average precision
         # reference: https://en.wikipedia.org/wiki/Evaluation_measures_(information_retrieval)#Average_precision
         num_rel = orig_cmc.sum()
+        print("num rel:", num_rel)
         tmp_cmc = orig_cmc.cumsum()
         tmp_cmc = [x / (i+1.) for i, x in enumerate(tmp_cmc)]
         tmp_cmc = np.asarray(tmp_cmc) * orig_cmc

@@ -6,6 +6,8 @@ import datetime
 import argparse
 import os.path as osp
 import numpy as np
+from PIL import Image
+import pdb
 
 import torch
 import torch.nn as nn
@@ -232,15 +234,37 @@ def train(epoch, model, criterion, optimizer, trainloader, use_gpu):
                    epoch+1, batch_idx+1, len(trainloader), batch_time=batch_time,
                    data_time=data_time, loss=losses))
 
+def read_image(img_path):
+    """Keep reading image until succeed.
+    This can avoid IOError incurred by heavy IO process."""
+    got_img = False
+    if not osp.exists(img_path):
+        raise IOError("{} does not exist".format(img_path))
+    while not got_img:
+        try:
+            img = Image.open(img_path).convert('RGB')
+            got_img = True
+        except IOError:
+            print("IOError incurred when reading '{}'. Will redo. Don't worry. Just chill.".format(img_path))
+            pass
+
+    transform_test = T.Compose([
+        T.Resize((args.height, args.width)),
+        T.ToTensor(),
+        T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ])
+    img = transform_test(img)
+    return img
+
 def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
     batch_time = AverageMeter()
     
     model.eval()
 
     cam_offsets = [5542, 3606, 27243, 31181, 0, 22401, 18967, 46765]
-    corr_matrix = [[1, 4, 7], [0, 2, 4, 7], [1, 3, 4],
-        [2, 4], [0, 1, 2, 3, 5, 6, 7], [4, 6],
-        [4, 5, 7], [0, 1, 4, 6]]
+    corr_matrix = [[0, 1, 4, 7], [0, 1, 2, 4, 7], [1, 2, 3, 4],
+        [2, 3, 4], [0, 1, 2, 3, 4, 5, 6, 7], [4, 5, 6],
+        [4, 5, 6, 7], [0, 1, 4, 6, 7]]
 
     with torch.no_grad():
         qf, q_pids, q_camids, q_fids, q_names = [], [], [], [], []
@@ -275,8 +299,13 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
     img_elim = 0
     tot_found = 0
     tot_pres = 0
-    for q_idx, (q_pid, q_camid, q_fid, q_name) in enumerate(zip(q_pids, q_camids, q_fids, q_names)):
 
+    # init query vars
+    q_idx = 0
+    q_pid, q_camid, q_fid, q_name = q_pids[0], q_camids[0], q_fids[0], q_names[0]
+
+    # for q_idx, (q_pid, q_camid, q_fid, q_name) in enumerate(zip(q_pids, q_camids, q_fids, q_names)):
+    while q_idx >= 0:
         print("\nquery id: ", q_idx, "pid: ", q_pid, "camid: ", q_camid,
             "frameid: ", q_fid, "name: ", q_name)
 
@@ -293,7 +322,7 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
                 valid_idxs = []
                 for idx, fid in enumerate(fids):
                     # gallery fid must be in [t(q_fid), t(q_fid) + 1 min]
-                    if fid.numpy() >= q_fid and fid.numpy() < (q_fid + 60*60*0.5):
+                    if fid.numpy() > q_fid and fid.numpy() <= (q_fid + 60*2):
                         if camids[idx] in corr_matrix[q_camid]:
                             valid_idxs.append(idx)
                         else:
@@ -339,7 +368,7 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
         # print("q_fids", q_fids)
         # print("g_fids", g_fids)
 
-        qf_i = qf[q_idx].unsqueeze(0)
+        qf_i = qf # qf[q_idx].unsqueeze(0)
 
         m, n = qf_i.size(0), gf.size(0)
         distmat = torch.pow(qf_i, 2).sum(dim=1, keepdim=True).expand(m, n) + \
@@ -349,8 +378,8 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
         # print(distmat)
 
         print("Computing CMC and mAP")
-        q_pid = np.expand_dims(q_pids[q_idx], axis=0)
-        q_camid = np.expand_dims(q_camids[q_idx], axis=0)
+        q_pid = np.expand_dims(q_pid, axis=0)
+        q_camid = np.expand_dims(q_camid, axis=0)
         cmc, AP, valid, f, p = evaluate(distmat, q_pid, g_pids, q_camid, g_camids, use_metric_cuhk03=args.use_metric_cuhk03,
             img_names=g_names, g_a_pids=g_a_pids, g_a_camids=g_a_camids)
 
@@ -367,18 +396,36 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
         print("matches found (so far): {}".format(tot_found))
         print("matches pres. (so far): {}".format(tot_pres))
 
+        # find next query img
+        indices = np.argsort(distmat, axis=1)
+        q_idx += 1
+        q_pid = g_pids[indices][0][0]
+        q_camid = g_camids[indices][0][0]
+        q_fid = g_fids[indices][0][0]
+        q_name = g_names[indices][0][0]
+        print("Next query (name, pid, cid, fid): ", q_name, q_pid, q_camid, q_fid)
+
+        # extract next img features
+        next_path = osp.normpath("data/dukemtmc-reid/DukeMTMC-reID/bounding_box_test/" + q_name)
+        next_img = read_image(next_path)
+        if use_gpu: next_img = next_img.cuda()
+        features = model(next_img.unsqueeze(0))
+        qf = features.data.cpu()
+
+    # bug: 'ValueError: setting an array element with a sequence.' if gallery sizes different
     all_cmc = np.asarray(all_cmc).astype(np.float32)
     cmc = all_cmc.sum(0) / num_valid_q
     mAP = np.mean(all_AP)
 
     print("Results ----------")
     print("img seen: {}".format(img_seen))
-    print("img tot:  {}".format(img_seen + img_elim))
+    print("img tot.: {}".format(img_seen + img_elim))
     print("matches found: {}".format(tot_found))
     print("matches pres.: {}".format(tot_pres))
     print("mAP: {:.1%}".format(mAP))
     print("CMC curve")
     for r in ranks:
+        # bug: if search window too small...
         print("Rank-{:<3}: {:.1%}".format(r, cmc[r-1]))
     print("------------------")
 
