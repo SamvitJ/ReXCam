@@ -261,6 +261,10 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
     
     model.eval()
 
+    frame_rate = 60.
+    t_search_window = frame_rate * 2.
+    dist_thresh = 160.
+
     cam_offsets = [5542, 3606, 27243, 31181, 0, 22401, 18967, 46765]
     corr_matrix = [[0, 1, 4, 7], [0, 1, 2, 4, 7], [1, 2, 3, 4],
         [2, 3, 4], [0, 1, 2, 3, 4, 5, 6, 7], [4, 5, 6],
@@ -307,7 +311,7 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
     # for q_idx, (q_pid, q_camid, q_fid, q_name) in enumerate(zip(q_pids, q_camids, q_fids, q_names)):
     while q_idx >= 0:
         print("\nquery id: ", q_idx, "pid: ", q_pid, "camid: ", q_camid,
-            "frameid: ", q_fid, "name: ", q_name)
+            "frameid: ", q_fid, "name: ", q_name, "\twindow (sec):", t_search_window / frame_rate)
 
         with torch.no_grad():
             gf, g_pids, g_camids, g_fids, g_names = [], [], [], [], []
@@ -322,7 +326,7 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
                 valid_idxs = []
                 for idx, fid in enumerate(fids):
                     # gallery fid must be in [t(q_fid), t(q_fid) + 1 min]
-                    if fid.numpy() > q_fid and fid.numpy() <= (q_fid + 60*2):
+                    if fid.numpy() > q_fid and fid.numpy() <= (q_fid + t_search_window):
                         if camids[idx] in corr_matrix[q_camid]:
                             valid_idxs.append(idx)
                         else:
@@ -378,10 +382,8 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
         # print(distmat)
 
         print("Computing CMC and mAP")
-        q_pid = np.expand_dims(q_pid, axis=0)
-        q_camid = np.expand_dims(q_camid, axis=0)
-        cmc, AP, valid, f, p = evaluate(distmat, q_pid, g_pids, q_camid, g_camids, use_metric_cuhk03=args.use_metric_cuhk03,
-            img_names=g_names, g_a_pids=g_a_pids, g_a_camids=g_a_camids)
+        cmc, AP, valid, f, p = evaluate(distmat, np.expand_dims(q_pid, axis=0), g_pids, np.expand_dims(q_camid, axis=0), g_camids,
+            use_metric_cuhk03=args.use_metric_cuhk03, img_names=g_names, g_a_pids=g_a_pids, g_a_camids=g_a_camids)
 
         if valid == 1:
             all_cmc.append(cmc[0])
@@ -396,21 +398,31 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
         print("matches found (so far): {}".format(tot_found))
         print("matches pres. (so far): {}".format(tot_pres))
 
-        # find next query img
+        # check for match
         indices = np.argsort(distmat, axis=1)
-        q_idx += 1
-        q_pid = g_pids[indices][0][0]
-        q_camid = g_camids[indices][0][0]
-        q_fid = g_fids[indices][0][0]
-        q_name = g_names[indices][0][0]
-        print("Next query (name, pid, cid, fid): ", q_name, q_pid, q_camid, q_fid)
+        if distmat[0][indices[0][0]] > dist_thresh:
+            print("not close enough, waiting...", distmat[0][indices[0][0]])
+            # extend window
+            t_search_window *= 2.0
+        else:
+            print("match declared:", distmat[0][indices[0][0]])
+            # reset window
+            t_search_window = frame_rate * 2.
 
-        # extract next img features
-        next_path = osp.normpath("data/dukemtmc-reid/DukeMTMC-reID/bounding_box_test/" + q_name)
-        next_img = read_image(next_path)
-        if use_gpu: next_img = next_img.cuda()
-        features = model(next_img.unsqueeze(0))
-        qf = features.data.cpu()
+            # find next query img
+            q_idx += 1
+            q_pid = g_pids[indices][0][0]
+            q_camid = g_camids[indices][0][0]
+            q_fid = g_fids[indices][0][0]
+            q_name = g_names[indices][0][0]
+            print("Next query (name, pid, cid, fid): ", q_name, q_pid, q_camid, q_fid)
+
+            # extract next img features
+            next_path = osp.normpath("data/dukemtmc-reid/DukeMTMC-reID/bounding_box_test/" + q_name)
+            next_img = read_image(next_path)
+            if use_gpu: next_img = next_img.cuda()
+            features = model(next_img.unsqueeze(0))
+            qf = features.data.cpu()
 
     # bug: 'ValueError: setting an array element with a sequence.' if gallery sizes different
     all_cmc = np.asarray(all_cmc).astype(np.float32)
