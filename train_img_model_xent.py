@@ -312,7 +312,7 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
     # for q_idx, (q_pid, q_camid, q_fid, q_name) in enumerate(zip(q_pids, q_camids, q_fids, q_names)):
     while q_idx >= 0:
         print("\nquery id: ", q_idx, "pid: ", q_pid, "camid: ", q_camid,
-            "frameid: ", q_fid, "name: ", q_name, "\twindow (sec):", t_search_win / f_rate)
+            "frameid: ", q_fid, "name: ", q_name, "\twin (sec):", t_search_win / f_rate)
 
         with torch.no_grad():
             gf, g_pids, g_camids, g_fids, g_names = [], [], [], [], []
@@ -403,15 +403,16 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
         indices = np.argsort(distmat, axis=1)
         if distmat[0][indices[0][0]] > dist_thresh:
             print("not close enough, waiting...", distmat[0][indices[0][0]])
-            # extend window, set flag
-            t_search_win *= 4.0
-            if t_search_win == f_rate * 128.:
-                print("now checking all cameras!")
-                check_all_cams = True
             # check exit condition
-            if t_search_win == f_rate * 512.:
+            if t_search_win == f_rate * 128.:
                 print("could not find person!")
                 break
+            # set flag, extend window
+            if not check_all_cams and t_search_win == f_rate * 32.:
+                print("now checking all cameras!")
+                check_all_cams = True
+            else:
+                t_search_win *= 4.0
         else:
             print("match declared:", distmat[0][indices[0][0]])
             # reset window, flag
