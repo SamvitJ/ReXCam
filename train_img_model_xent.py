@@ -432,7 +432,8 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
             features = model(next_img.unsqueeze(0))
             qf = features.data.cpu()
 
-    # bug: 'ValueError: setting an array element with a sequence.' if gallery sizes different
+    min_len = min(map(len, all_cmc))
+    all_cmc = [cmc[:min_len] for cmc in all_cmc]
     all_cmc = np.asarray(all_cmc).astype(np.float32)
     cmc = all_cmc.sum(0) / num_valid_q
     mAP = np.mean(all_AP)
@@ -445,8 +446,8 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
     print("mAP: {:.1%}".format(mAP))
     print("CMC curve")
     for r in ranks:
-        # bug: if search window too small...
-        print("Rank-{:<3}: {:.1%}".format(r, cmc[r-1]))
+        if r-1 < len(cmc):
+            print("Rank-{:<3}: {:.1%}".format(r, cmc[r-1]))
     print("------------------")
 
     return cmc[0]
