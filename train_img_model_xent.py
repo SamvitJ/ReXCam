@@ -262,9 +262,7 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
     model.eval()
 
     f_rate = 60.
-    t_search_win = f_rate * 2.
     dist_thresh = 160.
-    check_all_cams = False
 
     cam_offsets = [5542, 3606, 27243, 31181, 0, 22401, 18967, 46765]
     corr_matrix = [[0, 1, 4, 7], [0, 1, 2, 4, 7], [1, 2, 3, 4],
@@ -305,133 +303,140 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
     tot_found = 0
     tot_pres = 0
 
-    # init query vars
-    q_idx = 0
-    q_pid, q_camid, q_fid, q_name = q_pids[0], q_camids[0], q_fids[0], q_names[0]
+    for oq_idx, (q_pid, q_camid, q_fid, q_name) in enumerate(zip(q_pids, q_camids, q_fids, q_names)):
 
-    # for q_idx, (q_pid, q_camid, q_fid, q_name) in enumerate(zip(q_pids, q_camids, q_fids, q_names)):
-    while q_idx >= 0:
-        print("\nquery id: ", q_idx, "pid: ", q_pid, "camid: ", q_camid,
-            "frameid: ", q_fid, "name: ", q_name, "\twin (sec):", t_search_win / f_rate)
+        print("\nnew query person ------------------------------------ ")
+        print("query id: ", oq_idx, "pid: ", q_pid, "camid: ", q_camid, "frameid: ", q_fid, "name: ", q_name)
 
-        with torch.no_grad():
-            gf, g_pids, g_camids, g_fids, g_names = [], [], [], [], []
-            g_a_pids, g_a_camids = [], []
-            end = time.time()
-            ctr = 0
-            for batch_idx, (names, imgs, pids, camids, fids) in enumerate(galleryloader):
-                if use_gpu: imgs = imgs.cuda()
+        # init vars
+        q_idx = 0
+        t_search_win = f_rate * 2.
+        check_all_cams = False
 
-                fids += torch.LongTensor([cam_offsets[cid] for cid in camids])
+        while q_idx >= 0:
+            print("\nquery inst: ", q_idx, "pid: ", q_pid, "camid: ", q_camid,
+                "frameid: ", q_fid, "name: ", q_name, "\twin (sec):", t_search_win / f_rate)
 
-                valid_idxs = []
-                for idx, fid in enumerate(fids):
-                    # gallery fid must be in [t(q_fid), t(q_fid) + 1 min]
-                    if fid.numpy() > q_fid and fid.numpy() <= (q_fid + t_search_win):
-                        if check_all_cams or (camids[idx] in corr_matrix[q_camid]):
-                            valid_idxs.append(idx)
-                        else:
-                            ctr += 1
-                        g_a_pids.append(pids[idx])
-                        g_a_camids.append(camids[idx])
-                if len(valid_idxs) == 0:
-                    continue
-
-                names = [names[i] for i in valid_idxs]
-                imgs = torch.index_select(imgs, 0, torch.cuda.LongTensor(valid_idxs))
-                pids = torch.index_select(pids, 0, torch.LongTensor(valid_idxs))
-                camids = [camids[i] for i in valid_idxs]
-                fids = torch.index_select(fids, 0, torch.LongTensor(valid_idxs))
-
+            with torch.no_grad():
+                gf, g_pids, g_camids, g_fids, g_names = [], [], [], [], []
+                g_a_pids, g_a_camids = [], []
                 end = time.time()
-                features = model(imgs)
-                batch_time.update(time.time() - end)
+                ctr = 0
+                for batch_idx, (names, imgs, pids, camids, fids) in enumerate(galleryloader):
+                    if use_gpu: imgs = imgs.cuda()
 
-                features = features.data.cpu()
-                gf.append(features)
-                g_pids.extend(pids)
-                g_camids.extend(camids)
-                g_names.extend(names)
-                g_fids.extend(fids)
-            gf = torch.cat(gf, 0)
-            g_a_pids = np.asarray(g_a_pids)
-            g_a_camids = np.asarray(g_a_camids)
-            g_pids = np.asarray(g_pids)
-            g_camids = np.asarray(g_camids)
-            g_names = np.asarray(g_names)
-            g_fids = np.asarray(g_fids)
-            # print(img_names)
-            print("eliminated: ", ctr)
-            print("new gallery size: ", len(gf))
-            img_seen += len(gf)
-            img_elim += ctr
+                    fids += torch.LongTensor([cam_offsets[cid] for cid in camids])
 
-            print("Extracted features for gallery set, obtained {}-by-{} matrix".format(gf.size(0), gf.size(1)))
+                    valid_idxs = []
+                    for idx, fid in enumerate(fids):
+                        # gallery fid must be in (t(q_fid), t(q_fid) + t_search_win]
+                        if fid.numpy() > q_fid and fid.numpy() <= (q_fid + t_search_win):
+                            if check_all_cams or (camids[idx] in corr_matrix[q_camid]):
+                                valid_idxs.append(idx)
+                            else:
+                                ctr += 1
+                            g_a_pids.append(pids[idx])
+                            g_a_camids.append(camids[idx])
+                    if len(valid_idxs) == 0:
+                        continue
 
-        print("==> BatchTime(s)/BatchSize(img): {:.3f}/{}".format(batch_time.avg, args.test_batch))
+                    names = [names[i] for i in valid_idxs]
+                    imgs = torch.index_select(imgs, 0, torch.cuda.LongTensor(valid_idxs))
+                    pids = torch.index_select(pids, 0, torch.LongTensor(valid_idxs))
+                    camids = [camids[i] for i in valid_idxs]
+                    fids = torch.index_select(fids, 0, torch.LongTensor(valid_idxs))
 
-        # print("q_fids", q_fids)
-        # print("g_fids", g_fids)
+                    end = time.time()
+                    features = model(imgs)
+                    batch_time.update(time.time() - end)
 
-        qf_i = qf # qf[q_idx].unsqueeze(0)
+                    features = features.data.cpu()
+                    gf.append(features)
+                    g_pids.extend(pids)
+                    g_camids.extend(camids)
+                    g_names.extend(names)
+                    g_fids.extend(fids)
+                gf = torch.cat(gf, 0)
+                g_a_pids = np.asarray(g_a_pids)
+                g_a_camids = np.asarray(g_a_camids)
+                g_pids = np.asarray(g_pids)
+                g_camids = np.asarray(g_camids)
+                g_names = np.asarray(g_names)
+                g_fids = np.asarray(g_fids)
+                # print(img_names)
+                print("eliminated: ", ctr)
+                print("new gallery size: ", len(gf))
+                img_seen += len(gf)
+                img_elim += ctr
 
-        m, n = qf_i.size(0), gf.size(0)
-        distmat = torch.pow(qf_i, 2).sum(dim=1, keepdim=True).expand(m, n) + \
-                  torch.pow(gf, 2).sum(dim=1, keepdim=True).expand(n, m).t()
-        distmat.addmm_(1, -2, qf_i, gf.t())
-        distmat = distmat.numpy()
-        # print(distmat)
+                print("Extracted features for gallery set, obtained {}-by-{} matrix".format(gf.size(0), gf.size(1)))
 
-        print("Computing CMC and mAP")
-        cmc, AP, valid, f, p = evaluate(distmat, np.expand_dims(q_pid, axis=0), g_pids, np.expand_dims(q_camid, axis=0), g_camids,
-            use_metric_cuhk03=args.use_metric_cuhk03, img_names=g_names, g_a_pids=g_a_pids, g_a_camids=g_a_camids)
+            print("==> BatchTime(s)/BatchSize(img): {:.3f}/{}".format(batch_time.avg, args.test_batch))
 
-        if valid == 1:
-            all_cmc.append(cmc[0])
-            all_AP.append(AP[0])
-            num_valid_q += valid
-            tot_found += f
-            tot_pres += p
+            # print("q_fids", q_fids)
+            # print("g_fids", g_fids)
 
-        print("mAP (so far): {:.1%}".format(np.mean(all_AP)))
-        print("img seen (so far): {}".format(img_seen))
-        print("img tot. (so far): {}".format(img_seen + img_elim))
-        print("matches found (so far): {}".format(tot_found))
-        print("matches pres. (so far): {}".format(tot_pres))
+            # set query features, if first instance
+            if q_idx == 0:
+                qf_i = qf[oq_idx].unsqueeze(0)
 
-        # check for match
-        indices = np.argsort(distmat, axis=1)
-        if distmat[0][indices[0][0]] > dist_thresh:
-            print("not close enough, waiting...", distmat[0][indices[0][0]])
-            # check exit condition
-            if t_search_win == f_rate * 128.:
-                print("could not find person!")
-                break
-            # set flag, extend window
-            if not check_all_cams and t_search_win == f_rate * 32.:
-                print("now checking all cameras!")
-                check_all_cams = True
+            m, n = qf_i.size(0), gf.size(0)
+            distmat = torch.pow(qf_i, 2).sum(dim=1, keepdim=True).expand(m, n) + \
+                      torch.pow(gf, 2).sum(dim=1, keepdim=True).expand(n, m).t()
+            distmat.addmm_(1, -2, qf_i, gf.t())
+            distmat = distmat.numpy()
+            # print(distmat)
+
+            print("Computing CMC and mAP")
+            cmc, AP, valid, f, p = evaluate(distmat, np.expand_dims(q_pid, axis=0), g_pids, np.expand_dims(q_camid, axis=0), g_camids,
+                use_metric_cuhk03=args.use_metric_cuhk03, img_names=g_names, g_a_pids=g_a_pids, g_a_camids=g_a_camids)
+
+            if valid == 1:
+                all_cmc.append(cmc[0])
+                all_AP.append(AP[0])
+                num_valid_q += valid
+                tot_found += f
+                tot_pres += p
+
+            print("mAP (so far): {:.1%}".format(np.mean(all_AP)))
+            print("img seen (so far): {}".format(img_seen))
+            print("img tot. (so far): {}".format(img_seen + img_elim))
+            print("matches found (so far): {}".format(tot_found))
+            print("matches pres. (so far): {}".format(tot_pres))
+
+            # check for match
+            indices = np.argsort(distmat, axis=1)
+            if distmat[0][indices[0][0]] > dist_thresh:
+                print("not close enough, waiting...", distmat[0][indices[0][0]])
+                # check exit condition
+                if t_search_win == f_rate * 128.:
+                    print("could not find person, giving up!")
+                    break
+                # set flag, extend window
+                if not check_all_cams and t_search_win == f_rate * 32.:
+                    print("now checking all cameras!")
+                    check_all_cams = True
+                else:
+                    t_search_win *= 4.0
             else:
-                t_search_win *= 4.0
-        else:
-            print("match declared:", distmat[0][indices[0][0]])
-            # reset window, flag
-            t_search_win = f_rate * 2.
-            check_all_cams = False
+                print("match declared:", distmat[0][indices[0][0]])
+                # reset window, flag
+                t_search_win = f_rate * 2.
+                check_all_cams = False
 
-            # find next query img
-            q_idx += 1
-            q_pid = g_pids[indices][0][0]
-            q_camid = g_camids[indices][0][0]
-            q_fid = g_fids[indices][0][0]
-            q_name = g_names[indices][0][0]
-            print("Next query (name, pid, cid, fid): ", q_name, q_pid, q_camid, q_fid)
-            # extract next img features
-            next_path = osp.normpath("data/dukemtmc-reid/DukeMTMC-reID/bounding_box_test/" + q_name)
-            next_img = read_image(next_path)
-            if use_gpu: next_img = next_img.cuda()
-            features = model(next_img.unsqueeze(0))
-            qf = features.data.cpu()
+                # find next query img
+                q_idx += 1
+                q_pid = g_pids[indices][0][0]
+                q_camid = g_camids[indices][0][0]
+                q_fid = g_fids[indices][0][0]
+                q_name = g_names[indices][0][0]
+                print("Next query (name, pid, cid, fid): ", q_name, q_pid, q_camid, q_fid)
+                # extract next img features
+                next_path = osp.normpath("data/dukemtmc-reid/DukeMTMC-reID/bounding_box_test/" + q_name)
+                next_img = read_image(next_path)
+                if use_gpu: next_img = next_img.cuda()
+                features = model(next_img.unsqueeze(0))
+                qf_i = features.data.cpu()
 
     min_len = min(map(len, all_cmc))
     all_cmc = [cmc[:min_len] for cmc in all_cmc]
