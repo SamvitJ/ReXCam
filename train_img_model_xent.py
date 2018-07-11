@@ -315,7 +315,7 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
         check_all_cams = False
 
         while q_idx >= 0:
-            print("\nquery inst: ", q_idx, "pid: ", q_pid, "camid: ", q_camid,
+            print("\nquery num: ", q_idx, "pid: ", q_pid, "camid: ", q_camid,
                 "frameid: ", q_fid, "name: ", q_name,
                 "\twin: [", s_lower_b / f_rate, ",", s_upper_b / f_rate, "]")
 
@@ -333,7 +333,10 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
                     for idx, fid in enumerate(fids):
                         # gallery fid must be in (t(q_fid), t(q_fid) + t_search_win]
                         if fid.numpy() > (q_fid + s_lower_b) and fid.numpy() <= (q_fid + s_upper_b):
-                            if check_all_cams or (camids[idx] in corr_matrix[q_camid]):
+                            if check_all_cams and s_upper_b == f_rate * 32.:
+                                if camids[idx] not in corr_matrix[q_camid]:
+                                    valid_idxs.append(idx)
+                            elif check_all_cams or (camids[idx] in corr_matrix[q_camid]):
                                 valid_idxs.append(idx)
                             else:
                                 ctr += 1
@@ -418,6 +421,7 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
                 if not check_all_cams and s_upper_b == f_rate * 32.:
                     print("now checking all cameras!")
                     check_all_cams = True
+                    s_lower_b = 0.
                 else:
                     s_lower_b = s_upper_b
                     s_upper_b *= 4.0
