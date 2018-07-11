@@ -334,6 +334,7 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
                         # gallery fid must be in (t(q_fid), t(q_fid) + t_search_win]
                         if fid.numpy() > (q_fid + s_lower_b) and fid.numpy() <= (q_fid + s_upper_b):
                             if check_all_cams and s_upper_b == f_rate * 32.:
+                                # historical search on OTHER cameras
                                 if camids[idx] not in corr_matrix[q_camid]:
                                     valid_idxs.append(idx)
                             elif check_all_cams or (camids[idx] in corr_matrix[q_camid]):
@@ -361,6 +362,13 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
                     g_camids.extend(camids)
                     g_names.extend(names)
                     g_fids.extend(fids)
+
+                if len(gf) == 0:
+                    print("no candidates detected, skipping")
+                    s_lower_b = s_upper_b
+                    s_upper_b *= 4.0
+                    continue
+
                 gf = torch.cat(gf, 0)
                 g_a_pids = np.asarray(g_a_pids)
                 g_a_camids = np.asarray(g_a_camids)
