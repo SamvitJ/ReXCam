@@ -310,12 +310,14 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
 
         # init vars
         q_idx = 0
-        t_search_win = f_rate * 2.
+        s_lower_b = 0.
+        s_upper_b = f_rate * 2.
         check_all_cams = False
 
         while q_idx >= 0:
             print("\nquery inst: ", q_idx, "pid: ", q_pid, "camid: ", q_camid,
-                "frameid: ", q_fid, "name: ", q_name, "\twin (sec):", t_search_win / f_rate)
+                "frameid: ", q_fid, "name: ", q_name,
+                "\twin: [", s_lower_b / f_rate, ",", s_upper_b / f_rate, "]")
 
             with torch.no_grad():
                 gf, g_pids, g_camids, g_fids, g_names = [], [], [], [], []
@@ -330,7 +332,7 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
                     valid_idxs = []
                     for idx, fid in enumerate(fids):
                         # gallery fid must be in (t(q_fid), t(q_fid) + t_search_win]
-                        if fid.numpy() > q_fid and fid.numpy() <= (q_fid + t_search_win):
+                        if fid.numpy() > (q_fid + s_lower_b) and fid.numpy() <= (q_fid + s_upper_b):
                             if check_all_cams or (camids[idx] in corr_matrix[q_camid]):
                                 valid_idxs.append(idx)
                             else:
@@ -409,19 +411,21 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
             if distmat[0][indices[0][0]] > dist_thresh:
                 print("not close enough, waiting...", distmat[0][indices[0][0]])
                 # check exit condition
-                if t_search_win == f_rate * 128.:
+                if s_upper_b == f_rate * 128.:
                     print("could not find person, giving up!")
                     break
                 # set flag, extend window
-                if not check_all_cams and t_search_win == f_rate * 32.:
+                if not check_all_cams and s_upper_b == f_rate * 32.:
                     print("now checking all cameras!")
                     check_all_cams = True
                 else:
-                    t_search_win *= 4.0
+                    s_lower_b = s_upper_b
+                    s_upper_b *= 4.0
             else:
                 print("match declared:", distmat[0][indices[0][0]])
                 # reset window, flag
-                t_search_win = f_rate * 2.
+                s_lower_b = 0.
+                s_upper_b = f_rate * 2.
                 check_all_cams = False
 
                 # find next query img
