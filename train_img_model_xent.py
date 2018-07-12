@@ -298,22 +298,29 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
     all_cmc = []
     all_AP = []
     num_valid_q = 0.
-    img_seen = 0
-    img_elim = 0
-    tot_found = 0
-    tot_pres = 0
-    delay = 0.
+
+    tot_img_seen = 0
+    tot_img_elim = 0
+    tot_match_found = 0
+    tot_match_pres = 0
+    tot_delay = 0.
 
     for oq_idx, (q_pid, q_camid, q_fid, q_name) in enumerate(zip(q_pids, q_camids, q_fids, q_names)):
 
         print("\nnew query person ------------------------------------ ")
         print("query id: ", oq_idx, "pid: ", q_pid, "camid: ", q_camid, "frameid: ", q_fid, "name: ", q_name)
 
-        # init vars
+        # query vars
         q_idx = 0
         s_lower_b = 0.
         s_upper_b = f_rate * 2.
         check_all_cams = False
+
+        img_seen = 0
+        img_elim = 0
+        match_found = 0
+        match_pres = 0
+        delay = 0.
 
         while q_idx >= 0:
             print("\nquery: (", oq_idx, ",", q_idx, ")", "pid: ", q_pid, "camid: ", q_camid,
@@ -409,14 +416,17 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
                 all_cmc.append(cmc[0])
                 all_AP.append(AP[0])
                 num_valid_q += valid
-                tot_found += f
-                tot_pres += p
+                match_found += f
+                match_pres += p
+
+            if check_all_cams and s_upper_b == f_rate * 32.:
+                delay += 32.
 
             print("mAP (so far): {:.1%}".format(np.mean(all_AP)))
             print("img seen (so far): {}".format(img_seen))
             print("img tot. (so far): {}".format(img_seen + img_elim))
-            print("matches found (so far): {}".format(tot_found))
-            print("matches pres. (so far): {}".format(tot_pres))
+            print("matches found (so far): {}".format(match_found))
+            print("matches pres. (so far): {}".format(match_pres))
             print("delay (so far): {}".format(delay))
 
             # check for match
@@ -426,13 +436,13 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
                 # check exit condition
                 if s_upper_b == f_rate * 64.:
                     print("could not find person, giving up!")
+                    print("frames tracked: ", q_fids[oq_idx], "-", q_fid)
                     break
                 # set flag, extend window
                 if not check_all_cams and s_upper_b == f_rate * 32.:
                     print("now checking all cameras!")
                     check_all_cams = True
                     s_lower_b = 0.
-                    delay += 32.
                 else:
                     s_lower_b = s_upper_b
                     s_upper_b += (f_rate * 2.0)
@@ -450,6 +460,7 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
                 q_fid = g_fids[indices][0][0]
                 q_name = g_names[indices][0][0]
                 print("Next query (name, pid, cid, fid): ", q_name, q_pid, q_camid, q_fid)
+
                 # extract next img features
                 next_path = osp.normpath("data/dukemtmc-reid/DukeMTMC-reID/bounding_box_test/" + q_name)
                 next_img = read_image(next_path)
@@ -457,19 +468,28 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
                 features = model(next_img.unsqueeze(0))
                 qf_i = features.data.cpu()
 
+        # update aggregate stats
+        tot_img_seen += img_seen
+        tot_img_elim += img_elim
+        tot_match_found += match_found
+        tot_match_pres  += match_pres
+        tot_delay += delay
+
+        mAP = np.mean(all_AP)
+
+        print("Aggregate results ----------")
+        print("img seen: {}".format(tot_img_seen))
+        print("img tot.: {}".format(tot_img_seen + tot_img_elim))
+        print("matches found: {}".format(tot_match_found))
+        print("matches pres.: {}".format(tot_match_pres))
+        print("delay (avg.): {}".format(tot_delay / len(q_pids)))
+        print("mAP: {:.1%}".format(mAP))
+
     min_len = min(map(len, all_cmc))
     all_cmc = [cmc[:min_len] for cmc in all_cmc]
     all_cmc = np.asarray(all_cmc).astype(np.float32)
     cmc = all_cmc.sum(0) / num_valid_q
-    mAP = np.mean(all_AP)
 
-    print("Results ----------")
-    print("img seen: {}".format(img_seen))
-    print("img tot.: {}".format(img_seen + img_elim))
-    print("matches found: {}".format(tot_found))
-    print("matches pres.: {}".format(tot_pres))
-    print("avg. delay: {}".format(delay / len(q_pids)))
-    print("mAP: {:.1%}".format(mAP))
     print("CMC curve")
     for r in ranks:
         if r-1 < len(cmc):
