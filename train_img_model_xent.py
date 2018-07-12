@@ -305,6 +305,10 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
     tot_match_pres = 0
     tot_delay = 0.
 
+    exit_img_seen = 0.
+    exit_img_elim = 0.
+    exit_delay = 0.
+
     for oq_idx, (q_pid, q_camid, q_fid, q_name) in enumerate(zip(q_pids, q_camids, q_fids, q_names)):
 
         print("\nnew query person ------------------------------------ ")
@@ -316,16 +320,24 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
         s_upper_b = f_rate * 2.
         check_all_cams = False
 
-        img_seen = 0
-        img_elim = 0
-        match_found = 0
-        match_pres = 0
-        delay = 0.
+        # query stats
+        q_img_seen = 0
+        q_img_elim = 0
+        q_match_found = 0
+        q_match_pres = 0
+        q_delay = 0.
 
         while q_idx >= 0:
             print("\nquery: (", oq_idx, ",", q_idx, ")", "pid: ", q_pid, "camid: ", q_camid,
                 "frameid: ", q_fid, "name: ", q_name,
                 "\twin: [", s_lower_b / f_rate, ",", s_upper_b / f_rate, "]")
+
+            # query inst. stats
+            img_seen = 0
+            img_elim = 0
+            match_found = 0
+            match_pres = 0
+            delay = 0.
 
             with torch.no_grad():
                 gf, g_pids, g_camids, g_fids, g_names = [], [], [], [], []
@@ -339,7 +351,7 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
 
                     valid_idxs = []
                     for idx, fid in enumerate(fids):
-                        # gallery fid must be in (t(q_fid), t(q_fid) + t_search_win]
+                        # gallery fid must be in (t(q_fid) + s_lower_b, t(q_fid) + s_upper_b]
                         if fid.numpy() > (q_fid + s_lower_b) and fid.numpy() <= (q_fid + s_upper_b):
                             if check_all_cams and s_upper_b == f_rate * 32.:
                                 # historical search on OTHER cameras
@@ -384,7 +396,8 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
                 g_camids = np.asarray(g_camids)
                 g_names = np.asarray(g_names)
                 g_fids = np.asarray(g_fids)
-                # print(img_names)
+
+                # update resource stats
                 print("eliminated: ", ctr)
                 print("new gallery size: ", len(gf))
                 img_seen += len(gf)
@@ -401,12 +414,12 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
             if q_idx == 0:
                 qf_i = qf[oq_idx].unsqueeze(0)
 
+            # compute dist matrix
             m, n = qf_i.size(0), gf.size(0)
             distmat = torch.pow(qf_i, 2).sum(dim=1, keepdim=True).expand(m, n) + \
                       torch.pow(gf, 2).sum(dim=1, keepdim=True).expand(n, m).t()
             distmat.addmm_(1, -2, qf_i, gf.t())
             distmat = distmat.numpy()
-            # print(distmat)
 
             print("Computing CMC and mAP")
             cmc, AP, valid, f, p = evaluate(distmat, np.expand_dims(q_pid, axis=0), g_pids, np.expand_dims(q_camid, axis=0), g_camids,
@@ -417,17 +430,24 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
                 all_AP.append(AP[0])
                 num_valid_q += valid
                 match_found += f
-                match_pres += p
+                match_pres  += p
 
             if check_all_cams and s_upper_b == f_rate * 32.:
                 delay += 32.
 
+            # query stats
+            q_img_seen += img_seen
+            q_img_elim += img_elim
+            q_match_found += match_found
+            q_match_pres  += match_pres
+            q_delay += delay
+
             print("mAP (so far): {:.1%}".format(np.mean(all_AP)))
-            print("img seen (so far): {}".format(img_seen))
-            print("img tot. (so far): {}".format(img_seen + img_elim))
-            print("matches found (so far): {}".format(match_found))
-            print("matches pres. (so far): {}".format(match_pres))
-            print("delay (so far): {}".format(delay))
+            print("img seen (so far): {}".format(q_img_seen))
+            print("img tot. (so far): {}".format(q_img_seen + q_img_elim))
+            print("matches found (so far): {}".format(q_match_found))
+            print("matches pres. (so far): {}".format(q_match_pres))
+            print("delay (so far): {}".format(q_delay))
 
             # check for match
             indices = np.argsort(distmat, axis=1)
@@ -436,6 +456,17 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
                 # check exit condition
                 if s_upper_b == f_rate * 64.:
                     print("could not find person, giving up!")
+                    # undo stats for last query inst.
+                    q_img_seen -= img_seen
+                    q_img_elim -= img_elim
+                    q_match_found -= match_found
+                    q_match_pres  -= match_pres
+                    q_delay -= delay
+                    # update exit stats
+                    exit_img_seen += img_seen
+                    exit_img_elim += img_elim
+                    exit_delay += delay
+                    # tracking range
                     print("frames tracked: ", q_fids[oq_idx], "-", q_fid)
                     break
                 # set flag, extend window
@@ -469,12 +500,11 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
                 qf_i = features.data.cpu()
 
         # update aggregate stats
-        tot_img_seen += img_seen
-        tot_img_elim += img_elim
-        tot_match_found += match_found
-        tot_match_pres  += match_pres
-        tot_delay += delay
-
+        tot_img_seen += q_img_seen
+        tot_img_elim += q_img_elim
+        tot_match_found += q_match_found
+        tot_match_pres  += q_match_pres
+        tot_delay += q_delay
         mAP = np.mean(all_AP)
 
         print("Aggregate results ----------")
@@ -484,6 +514,10 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
         print("matches pres.: {}".format(tot_match_pres))
         print("delay (avg.): {}".format(tot_delay / len(q_pids)))
         print("mAP: {:.1%}".format(mAP))
+        print("Exit stats ----------")
+        print("exit img seen: {}".format(exit_img_seen))
+        print("exit img tot.: {}".format(exit_img_seen + exit_img_elim))
+        print("exit delay (avg.): {}".format(exit_delay / len(q_pids)))
 
     min_len = min(map(len, all_cmc))
     all_cmc = [cmc[:min_len] for cmc in all_cmc]

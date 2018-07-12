@@ -137,7 +137,6 @@ def eval_market1501(distmat, q_pids, g_pids, q_camids, g_camids, max_rank,
         # compute average precision
         # reference: https://en.wikipedia.org/wiki/Evaluation_measures_(information_retrieval)#Average_precision
         num_rel = orig_cmc.sum()
-        print("num rel:", num_rel)
         tmp_cmc = orig_cmc.cumsum()
         tmp_cmc = [x / (i+1.) for i, x in enumerate(tmp_cmc)]
         tmp_cmc = np.asarray(tmp_cmc) * orig_cmc
