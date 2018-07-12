@@ -309,14 +309,14 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
     exit_img_elim = 0.
     exit_delay = 0.
 
-    for oq_idx, (q_pid, q_camid, q_fid, q_name) in enumerate(zip(q_pids, q_camids, q_fids, q_names)):
+    for q_idx, (q_pid, q_camid, q_fid, q_name) in enumerate(zip(q_pids, q_camids, q_fids, q_names)):
 
         print("\nnew query person ------------------------------------ ")
-        print("query id: ", oq_idx, "pid: ", q_pid, "camid: ", q_camid,
+        print("query id: ", q_idx, "pid: ", q_pid, "camid: ", q_camid,
             "frameid: ", q_fid, "name: ", q_name)
 
         # query vars
-        q_idx = 0
+        q_iter = 0
         s_lower_b = 0.
         s_upper_b = f_rate * 2.
         check_all_cams = False
@@ -328,8 +328,8 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
         q_match_pres = 0
         q_delay = 0.
 
-        while q_idx >= 0:
-            print("\nquery: (", oq_idx, ",", q_idx, ")",
+        while q_iter >= 0:
+            print("\nquery: (", q_idx, ",", q_iter, ")",
                 "pid: ", q_pid, "camid: ", q_camid, "frameid: ", q_fid, "name: ", q_name,
                 "\twin: [", s_lower_b / f_rate, ",", s_upper_b / f_rate, "]")
 
@@ -416,8 +416,8 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
             # print("g_fids", g_fids)
 
             # set query features, if first iter.
-            if q_idx == 0:
-                qf_i = qf[oq_idx].unsqueeze(0)
+            if q_iter == 0:
+                qf_i = qf[q_idx].unsqueeze(0)
 
             # compute dist matrix
             m, n = qf_i.size(0), gf.size(0)
@@ -454,7 +454,7 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
                 # check exit condition
                 if s_upper_b == f_rate * 64.:
                     print("could not find person, giving up!")
-                    print("\nframes tracked: ", q_fids[oq_idx], "-", q_fid)
+                    print("\nframes tracked: ", q_fids[q_idx], "-", q_fid)
                     # update exit stats
                     is_exit = True
                     exit_img_seen += q_img_seen
@@ -477,7 +477,7 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
                 check_all_cams = False
 
                 # find next query img
-                q_idx += 1
+                q_iter += 1
                 q_pid = g_pids[indices][0][0]
                 q_camid = g_camids[indices][0][0]
                 q_fid = g_fids[indices][0][0]
@@ -505,12 +505,12 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
         print("img tot.: {}".format(tot_img_seen + tot_img_elim))
         print("matches found: {}".format(tot_match_found))
         print("matches pres.: {}".format(tot_match_pres))
-        print("delay (avg.): {}".format(tot_delay / (oq_idx + 1)))
+        print("delay (avg.): {}".format(tot_delay / (q_idx + 1)))
         print("mAP: {:.1%}".format(mAP))
         print("Exit stats ----------")
         print("exit img seen: {}".format(exit_img_seen))
         print("exit img tot.: {}".format(exit_img_seen + exit_img_elim))
-        print("exit delay (avg.): {}".format(exit_delay / (oq_idx + 1)))
+        print("exit delay (avg.): {}".format(exit_delay / (q_idx + 1)))
 
     min_len = min(map(len, all_cmc))
     all_cmc = [cmc[:min_len] for cmc in all_cmc]
