@@ -302,6 +302,7 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
     img_elim = 0
     tot_found = 0
     tot_pres = 0
+    delay = 0.
 
     for oq_idx, (q_pid, q_camid, q_fid, q_name) in enumerate(zip(q_pids, q_camids, q_fids, q_names)):
 
@@ -315,7 +316,7 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
         check_all_cams = False
 
         while q_idx >= 0:
-            print("\nquery num: ", q_idx, "pid: ", q_pid, "camid: ", q_camid,
+            print("\nquery: (", oq_idx, ",", q_idx, ")", "pid: ", q_pid, "camid: ", q_camid,
                 "frameid: ", q_fid, "name: ", q_name,
                 "\twin: [", s_lower_b / f_rate, ",", s_upper_b / f_rate, "]")
 
@@ -366,7 +367,7 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
                 if len(gf) == 0:
                     print("no candidates detected, skipping")
                     s_lower_b = s_upper_b
-                    s_upper_b *= 4.0
+                    s_upper_b += (f_rate * 2.0)
                     continue
 
                 gf = torch.cat(gf, 0)
@@ -416,6 +417,7 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
             print("img tot. (so far): {}".format(img_seen + img_elim))
             print("matches found (so far): {}".format(tot_found))
             print("matches pres. (so far): {}".format(tot_pres))
+            print("delay (so far): {}".format(delay))
 
             # check for match
             indices = np.argsort(distmat, axis=1)
@@ -430,9 +432,10 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
                     print("now checking all cameras!")
                     check_all_cams = True
                     s_lower_b = 0.
+                    delay += 32.
                 else:
                     s_lower_b = s_upper_b
-                    s_upper_b *= 4.0
+                    s_upper_b += (f_rate * 2.0)
             else:
                 print("match declared:", distmat[0][indices[0][0]])
                 # reset window, flag
@@ -465,6 +468,7 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
     print("img tot.: {}".format(img_seen + img_elim))
     print("matches found: {}".format(tot_found))
     print("matches pres.: {}".format(tot_pres))
+    print("avg. delay: {}".format(delay / len(q_pids)))
     print("mAP: {:.1%}".format(mAP))
     print("CMC curve")
     for r in ranks:
