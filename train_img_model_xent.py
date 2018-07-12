@@ -312,7 +312,8 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
     for oq_idx, (q_pid, q_camid, q_fid, q_name) in enumerate(zip(q_pids, q_camids, q_fids, q_names)):
 
         print("\nnew query person ------------------------------------ ")
-        print("query id: ", oq_idx, "pid: ", q_pid, "camid: ", q_camid, "frameid: ", q_fid, "name: ", q_name)
+        print("query id: ", oq_idx, "pid: ", q_pid, "camid: ", q_camid,
+            "frameid: ", q_fid, "name: ", q_name)
 
         # query vars
         q_idx = 0
@@ -328,8 +329,8 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
         q_delay = 0.
 
         while q_idx >= 0:
-            print("\nquery: (", oq_idx, ",", q_idx, ")", "pid: ", q_pid, "camid: ", q_camid,
-                "frameid: ", q_fid, "name: ", q_name,
+            print("\nquery: (", oq_idx, ",", q_idx, ")",
+                "pid: ", q_pid, "camid: ", q_camid, "frameid: ", q_fid, "name: ", q_name,
                 "\twin: [", s_lower_b / f_rate, ",", s_upper_b / f_rate, "]")
 
             # query inst. stats
@@ -343,26 +344,33 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
                 gf, g_pids, g_camids, g_fids, g_names = [], [], [], [], []
                 g_a_pids, g_a_camids = [], []
                 end = time.time()
-                ctr = 0
+
                 for batch_idx, (names, imgs, pids, camids, fids) in enumerate(galleryloader):
                     if use_gpu: imgs = imgs.cuda()
 
                     fids += torch.LongTensor([cam_offsets[cid] for cid in camids])
 
+                    # compile valid gallery detections in batch
                     valid_idxs = []
                     for idx, fid in enumerate(fids):
-                        # gallery fid must be in (t(q_fid) + s_lower_b, t(q_fid) + s_upper_b]
+                        # check if gallery fid within range (s_lower_b, s_upper_b]
                         if fid.numpy() > (q_fid + s_lower_b) and fid.numpy() <= (q_fid + s_upper_b):
+                            # special case: historical search on skipped cameras
                             if check_all_cams and s_upper_b == f_rate * 32.:
-                                # historical search on OTHER cameras
                                 if camids[idx] not in corr_matrix[q_camid]:
                                     valid_idxs.append(idx)
+                            # search camera
                             elif check_all_cams or (camids[idx] in corr_matrix[q_camid]):
                                 valid_idxs.append(idx)
+                            # skip camera
                             else:
-                                ctr += 1
+                                img_elim += 1
+
+                            # all detections
                             g_a_pids.append(pids[idx])
                             g_a_camids.append(camids[idx])
+
+                    # no valid frames in batch
                     if len(valid_idxs) == 0:
                         continue
 
@@ -397,11 +405,10 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
                 g_names = np.asarray(g_names)
                 g_fids = np.asarray(g_fids)
 
-                # update resource stats
-                print("eliminated: ", ctr)
+                # gallery pruning stats
+                print("eliminated: ", img_elim)
                 print("new gallery size: ", len(gf))
                 img_seen += len(gf)
-                img_elim += ctr
 
                 print("Extracted features for gallery set, obtained {}-by-{} matrix".format(gf.size(0), gf.size(1)))
 
