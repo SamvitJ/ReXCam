@@ -424,7 +424,7 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
             if distmat[0][indices[0][0]] > dist_thresh:
                 print("not close enough, waiting...", distmat[0][indices[0][0]])
                 # check exit condition
-                if s_upper_b == f_rate * 128.:
+                if s_upper_b == f_rate * 64.:
                     print("could not find person, giving up!")
                     break
                 # set flag, extend window
