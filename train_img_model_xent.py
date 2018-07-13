@@ -263,6 +263,8 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
 
     f_rate = 60.
     dist_thresh = 160.
+    fallback_time = f_rate * 32
+    exit_time = f_rate * 64
 
     cam_offsets = [5542, 3606, 27243, 31181, 0, 22401, 18967, 46765]
     corr_matrix = [[0, 1, 4, 7], [0, 1, 2, 4, 7], [1, 2, 3, 4],
@@ -315,6 +317,7 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
         q_iter = 0
         s_lower_b = 0.
         s_upper_b = f_rate * 2.
+        check_other_cams = False
         check_all_cams = False
 
         # query stats
@@ -347,7 +350,7 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
                         # check if gallery fid within range (s_lower_b, s_upper_b]
                         if fid.numpy() > (q_fid + s_lower_b) and fid.numpy() <= (q_fid + s_upper_b):
                             # special case: historical search on skipped cameras
-                            if check_all_cams and s_upper_b == f_rate * 32.:
+                            if check_other_cams:
                                 if camids[idx] not in corr_matrix[q_camid]:
                                     valid_idxs.append(idx)
                             # search camera
@@ -431,8 +434,8 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
                 q_match_found += f
                 q_match_pres  += p
 
-            if check_all_cams and s_upper_b == f_rate * 32.:
-                q_delay += 32.
+            if check_other_cams:
+                q_delay += 2.
 
             print("mAP (so far): {:.1%}".format(np.mean(all_AP)))
             print("img seen (so far): {}".format(q_img_seen))
@@ -446,16 +449,22 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
             if distmat[0][indices[0][0]] > dist_thresh:
                 print("not close enough, waiting...", distmat[0][indices[0][0]])
                 # check exit condition
-                if s_upper_b == f_rate * 64.:
+                if s_upper_b == exit_time:
                     print("could not find person, giving up!")
                     print("\nframes tracked: ", q_fids[q_idx], "-", q_fid)
                     break
-                # set flag, extend window
-                if not check_all_cams and s_upper_b == f_rate * 32.:
-                    print("now checking all cameras!")
-                    check_all_cams = True
+                # revert to historical search
+                if not check_other_cams and s_upper_b == fallback_time:
+                    print("now checking other cameras!")
+                    check_other_cams = True
                     s_lower_b = 0.
+                    s_upper_b = f_rate * 2.
+                # extend window
                 else:
+                    if check_other_cams and s_upper_b == fallback_time:
+                        print("now checking all cameras!")
+                        check_other_cams = False
+                        check_all_cams = True
                     s_lower_b = s_upper_b
                     s_upper_b += (f_rate * 2.0)
             else:
@@ -463,6 +472,7 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
                 # reset window, flag
                 s_lower_b = 0.
                 s_upper_b = f_rate * 2.
+                check_other_cams = False
                 check_all_cams = False
 
                 # find next query img
