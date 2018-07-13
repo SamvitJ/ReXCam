@@ -16,7 +16,7 @@ from torch.utils.data import DataLoader
 from torch.optim import lr_scheduler
 
 import data_manager
-from dataset_loader import ImageDataset
+from dataset_loader import ImageDataset, ImageDatasetLazy
 import transforms as T
 import models
 from losses import CrossEntropyLabelSmooth, DeepSupervision
@@ -128,8 +128,8 @@ def main():
         pin_memory=pin_memory, drop_last=False,
     )
 
-    galleryloader = DataLoader(
-        ImageDataset(dataset.gallery, transform=transform_test),
+    gallery = ImageDatasetLazy(dataset.gallery, transform=transform_test)
+    galleryloader = DataLoader(gallery,
         batch_size=args.test_batch, shuffle=False, num_workers=args.workers,
         pin_memory=pin_memory, drop_last=False,
     )
@@ -155,7 +155,7 @@ def main():
 
     if args.evaluate:
         print("Evaluate only")
-        test(model, queryloader, galleryloader, use_gpu)
+        test(model, queryloader, gallery, use_gpu)
         return
 
     start_time = time.time()
@@ -173,7 +173,7 @@ def main():
         
         if (epoch+1) > args.start_eval and args.eval_step > 0 and (epoch+1) % args.eval_step == 0 or (epoch+1) == args.max_epoch:
             print("==> Test")
-            rank1 = test(model, queryloader, galleryloader, use_gpu)
+            rank1 = test(model, queryloader, gallery, use_gpu)
             is_best = rank1 > best_rank1
             if is_best:
                 best_rank1 = rank1
@@ -256,7 +256,7 @@ def read_image(img_path):
     img = transform_test(img)
     return img
 
-def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
+def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
     batch_time = AverageMeter()
     
     model.eval()
@@ -276,6 +276,7 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
         for batch_idx, (names, imgs, pids, camids, fids) in enumerate(queryloader):
             if use_gpu: imgs = imgs.cuda()
 
+            # adjust frame ids
             fids += torch.LongTensor([cam_offsets[cid] for cid in camids])
 
             end = time.time()
@@ -339,52 +340,50 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
                 g_a_pids, g_a_camids = [], []
                 end = time.time()
 
-                for batch_idx, (names, imgs, pids, camids, fids) in enumerate(galleryloader):
-                    if use_gpu: imgs = imgs.cuda()
+                # load gallery
+                for idx in range(0, len(gallery)):
+                    # extract dataset item
+                    img_name, pid, camid, fid = gallery[idx]
+                    fid += cam_offsets[camid]
 
-                    fids += torch.LongTensor([cam_offsets[cid] for cid in camids])
+                    if fid > (q_fid + s_lower_b) and fid <= (q_fid + s_upper_b):
+                        is_valid = False
 
-                    # compile valid gallery detections in batch
-                    valid_idxs = []
-                    for idx, fid in enumerate(fids):
-                        # check if gallery fid within range (s_lower_b, s_upper_b]
-                        if fid.numpy() > (q_fid + s_lower_b) and fid.numpy() <= (q_fid + s_upper_b):
-                            # special case: historical search on skipped cameras
-                            if check_other_cams:
-                                if camids[idx] not in corr_matrix[q_camid]:
-                                    valid_idxs.append(idx)
-                            # search camera
-                            elif check_all_cams or (camids[idx] in corr_matrix[q_camid]):
-                                valid_idxs.append(idx)
-                            # skip camera
-                            else:
-                                img_elim += 1
+                        # special case: historical search on skipped cameras
+                        if check_other_cams:
+                            if camid not in corr_matrix[q_camid]:
+                                is_valid = True
+                        # search camera
+                        elif check_all_cams or (camid in corr_matrix[q_camid]):
+                            is_valid = True
+                        # skip camera
+                        else:
+                            img_elim += 1
 
-                            # all detections
-                            g_a_pids.append(pids[idx])
-                            g_a_camids.append(camids[idx])
+                        if is_valid:
+                            g_names.append(img_name)
+                            g_pids.append(pid)
+                            g_camids.append(camid)
+                            g_fids.append(fid)
 
-                    # no valid frames in batch
-                    if len(valid_idxs) == 0:
-                        continue
+                        g_a_pids.append(pid)
+                        g_a_camids.append(camid)
 
-                    names = [names[i] for i in valid_idxs]
-                    imgs = torch.index_select(imgs, 0, torch.cuda.LongTensor(valid_idxs))
-                    pids = torch.index_select(pids, 0, torch.LongTensor(valid_idxs))
-                    camids = [camids[i] for i in valid_idxs]
-                    fids = torch.index_select(fids, 0, torch.LongTensor(valid_idxs))
+                # load images
+                imgs = []
+                for img_name in g_names:
+                    path = osp.normpath("data/dukemtmc-reid/DukeMTMC-reID/bounding_box_test/" + img_name)
+                    imgs.append(read_image(path))
+                imgs = torch.stack(imgs, dim=0)
+                if use_gpu: imgs = imgs.cuda()
 
-                    end = time.time()
-                    features = model(imgs)
-                    batch_time.update(time.time() - end)
+                # extract features
+                end = time.time()
+                features = model(imgs)
+                batch_time.update(time.time() - end)
+                gf.append(features.data.cpu())
 
-                    features = features.data.cpu()
-                    gf.append(features)
-                    g_pids.extend(pids)
-                    g_camids.extend(camids)
-                    g_names.extend(names)
-                    g_fids.extend(fids)
-
+                # check # detections
                 if len(gf) == 0:
                     print("no candidates detected, skipping")
                     s_lower_b = s_upper_b
@@ -405,9 +404,8 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
                 q_img_seen += len(gf)
                 q_img_elim += img_elim
 
-                print("Extracted features for gallery set, obtained {}-by-{} matrix".format(gf.size(0), gf.size(1)))
-
-            print("==> BatchTime(s)/BatchSize(img): {:.3f}/{}".format(batch_time.avg, args.test_batch))
+            print("Extracted features for gallery set, obtained {}-by-{} matrix".format(gf.size(0), gf.size(1)))
+            print("==> BatchTime(s)/BatchSize(img): {:.3f}/{}".format(batch_time.avg, len(gf)))
 
             # print("q_fids", q_fids)
             # print("g_fids", g_fids)
@@ -455,14 +453,14 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
                     break
                 # revert to historical search
                 if not check_other_cams and s_upper_b == fallback_time:
-                    print("now checking other cameras!")
+                    print("now checking OTHER cameras!")
                     check_other_cams = True
                     s_lower_b = 0.
                     s_upper_b = f_rate * 2.
                 # extend window
                 else:
                     if check_other_cams and s_upper_b == fallback_time:
-                        print("now checking all cameras!")
+                        print("now checking ALL cameras!")
                         check_other_cams = False
                         check_all_cams = True
                     s_lower_b = s_upper_b
@@ -484,11 +482,12 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
                 print("Next query (name, pid, cid, fid): ", q_name, q_pid, q_camid, q_fid)
 
                 # extract next img features
-                next_path = osp.normpath("data/dukemtmc-reid/DukeMTMC-reID/bounding_box_test/" + q_name)
-                next_img = read_image(next_path)
-                if use_gpu: next_img = next_img.cuda()
-                features = model(next_img.unsqueeze(0))
-                qf_i = features.data.cpu()
+                with torch.no_grad():
+                    next_path = osp.normpath("data/dukemtmc-reid/DukeMTMC-reID/bounding_box_test/" + q_name)
+                    next_img = read_image(next_path)
+                    if use_gpu: next_img = next_img.cuda()
+                    features = model(next_img.unsqueeze(0))
+                    qf_i = features.data.cpu()
 
         # update aggregate stats
         tot_img_seen += q_img_seen
