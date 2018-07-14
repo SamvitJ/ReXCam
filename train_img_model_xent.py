@@ -374,6 +374,34 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
                 for img_name in g_names:
                     path = osp.normpath("data/dukemtmc-reid/DukeMTMC-reID/bounding_box_test/" + img_name)
                     imgs.append(read_image(path))
+
+                # update delay
+                if check_other_cams:
+                    q_delay += 2.
+
+                # handle no candidate case
+                if len(imgs) == 0:
+                    print("no candidates detected, skipping")
+                    # check exit condition
+                    if s_upper_b == exit_time:
+                        print("could not find person, giving up!")
+                        print("\nframes tracked: ", q_fids[q_idx], "-", q_fid)
+                        break
+                    # revert to historical search
+                    if not check_other_cams and s_upper_b == fallback_time:
+                        print("now checking OTHER cameras!")
+                        check_other_cams = True
+                        s_lower_b = 0.
+                        s_upper_b = f_rate * 2.
+                    else: # extend window
+                        if check_other_cams and s_upper_b == fallback_time:
+                            print("now checking ALL cameras!")
+                            check_other_cams = False
+                            check_all_cams = True
+                        s_lower_b = s_upper_b
+                        s_upper_b += (f_rate * 2.0)
+                    continue
+
                 imgs = torch.stack(imgs, dim=0)
                 if use_gpu: imgs = imgs.cuda()
 
@@ -381,15 +409,8 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
                 end = time.time()
                 features = model(imgs)
                 batch_time.update(time.time() - end)
+
                 gf.append(features.data.cpu())
-
-                # check # detections
-                if len(gf) == 0:
-                    print("no candidates detected, skipping")
-                    s_lower_b = s_upper_b
-                    s_upper_b += (f_rate * 2.0)
-                    continue
-
                 gf = torch.cat(gf, 0)
                 g_a_pids = np.asarray(g_a_pids)
                 g_a_camids = np.asarray(g_a_camids)
@@ -431,9 +452,6 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
                 num_valid_q += valid
                 q_match_found += f
                 q_match_pres  += p
-
-            if check_other_cams:
-                q_delay += 2.
 
             print("mAP (so far): {:.1%}".format(np.mean(all_AP)))
             print("img seen (so far): {}".format(q_img_seen))
