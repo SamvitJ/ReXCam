@@ -295,6 +295,7 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
         [2, 3, 4], [0, 1, 2, 3, 4, 5, 6, 7], [4, 5, 6],
         [4, 5, 6, 7], [0, 1, 4, 6, 7]]
 
+    # process query images
     with torch.no_grad():
         qf, q_pids, q_camids, q_fids, q_names = [], [], [], [], []
         for batch_idx, (names, imgs, pids, camids, fids) in enumerate(queryloader):
@@ -332,6 +333,7 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
     tot_match_pres = 0
     tot_delay = 0.
 
+    # execute queries
     for q_idx, (q_pid, q_camid, q_fid, q_name) in enumerate(zip(q_pids, q_camids, q_fids, q_names)):
 
         print("\nnew query person ------------------------------------ ")
@@ -359,63 +361,61 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
 
             img_elim = 0
 
-            with torch.no_grad():
-                gf, g_pids, g_camids, g_fids, g_names = [], [], [], [], []
-                g_a_pids, g_a_camids = [], []
-                end = time.time()
+            gf, g_pids, g_camids, g_fids, g_names = [], [], [], [], []
+            g_a_pids, g_a_camids = [], []
 
-                # load gallery
-                for idx in range(0, len(gallery)):
-                    # extract dataset item
-                    img_name, pid, camid, fid = gallery[idx]
-                    fid += cam_offsets[camid]
+            # load gallery
+            for idx in range(0, len(gallery)):
+                img_name, pid, camid, fid = gallery[idx]
 
-                    if fid > (q_fid + s_lower_b) and fid <= (q_fid + s_upper_b):
-                        check_match = False
+                # adjust frame id
+                fid += cam_offsets[camid]
 
+                if fid > (q_fid + s_lower_b) and fid <= (q_fid + s_upper_b):
+                    check_frame = False
+
+                    if check_other_cams:
                         # special case: hist. search on skipped cameras
-                        if check_other_cams:
-                            if camid not in corr_matrix[q_camid]:
-                                check_match = True
-                        # search camera
-                        elif check_all_cams or (camid in corr_matrix[q_camid]):
-                            check_match = True
-                        # skip camera
-                        else:
-                            img_elim += 1
+                        if camid not in corr_matrix[q_camid]:
+                            check_frame = True
+                    elif check_all_cams or (camid in corr_matrix[q_camid]):
+                        check_frame = True
+                    else:
+                        img_elim += 1
 
-                        if check_match:
-                            g_names.append(img_name)
-                            g_pids.append(pid)
-                            g_camids.append(camid)
-                            g_fids.append(fid)
+                    if check_frame:
+                        g_names.append(img_name)
+                        g_pids.append(pid)
+                        g_camids.append(camid)
+                        g_fids.append(fid)
 
-                        g_a_pids.append(pid)
-                        g_a_camids.append(camid)
+                    g_a_pids.append(pid)
+                    g_a_camids.append(camid)
 
-                # load images
-                imgs = []
-                for img_name in g_names:
-                    path = osp.normpath("data/dukemtmc-reid/DukeMTMC-reID/bounding_box_test/" + img_name)
-                    imgs.append(read_image(path))
+            # load images
+            imgs = []
+            for img_name in g_names:
+                path = osp.normpath("data/dukemtmc-reid/DukeMTMC-reID/bounding_box_test/" + img_name)
+                imgs.append(read_image(path))
 
-                # update delay
-                if check_other_cams:
-                    q_delay += 2.
+            # update delay
+            if check_other_cams:
+                q_delay += 2.
 
-                # handle no candidate case
-                if len(imgs) == 0:
-                    print("no candidates detected, skipping")
-                    # check for exit
-                    if check_exit(s_upper_b=s_upper_b, exit_time=exit_time):
-                        print("\nframes tracked: ", q_fids[q_idx], "-", q_fid)
-                        break
-                    # handle retry
-                    s_lower_b, s_upper_b, check_other_cams, check_all_cams = handle_retry(f_rate=f_rate,
-                        s_lower_b=s_lower_b, s_upper_b=s_upper_b, fallback_time=fallback_time,
-                        check_other_cams=check_other_cams, check_all_cams=check_all_cams)
-                    continue
+            # handle no candidate case
+            if len(imgs) == 0:
+                print("no candidates detected, skipping")
+                # check for exit
+                if check_exit(s_upper_b=s_upper_b, exit_time=exit_time):
+                    print("\nframes tracked: ", q_fids[q_idx], "-", q_fid)
+                    break
+                # handle retry
+                s_lower_b, s_upper_b, check_other_cams, check_all_cams = handle_retry(f_rate=f_rate,
+                    s_lower_b=s_lower_b, s_upper_b=s_upper_b, fallback_time=fallback_time,
+                    check_other_cams=check_other_cams, check_all_cams=check_all_cams)
+                continue
 
+            with torch.no_grad():
                 imgs = torch.stack(imgs, dim=0)
                 if use_gpu: imgs = imgs.cuda()
 
@@ -426,18 +426,19 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
 
                 gf.append(features.data.cpu())
                 gf = torch.cat(gf, 0)
-                g_a_pids = np.asarray(g_a_pids)
-                g_a_camids = np.asarray(g_a_camids)
-                g_pids = np.asarray(g_pids)
-                g_camids = np.asarray(g_camids)
-                g_names = np.asarray(g_names)
-                g_fids = np.asarray(g_fids)
 
-                # gallery pruning stats
-                print("eliminated: ", img_elim)
-                print("new gallery size: ", len(gf))
-                q_img_seen += len(gf)
-                q_img_elim += img_elim
+            g_a_pids = np.asarray(g_a_pids)
+            g_a_camids = np.asarray(g_a_camids)
+            g_pids = np.asarray(g_pids)
+            g_camids = np.asarray(g_camids)
+            g_names = np.asarray(g_names)
+            g_fids = np.asarray(g_fids)
+
+            # gallery pruning stats
+            print("eliminated: ", img_elim)
+            print("new gallery size: ", len(gf))
+            q_img_seen += len(gf)
+            q_img_elim += img_elim
 
             print("Extracted features for gallery set, obtained {}-by-{} matrix".format(gf.size(0), gf.size(1)))
             print("==> BatchTime(s)/BatchSize(img): {:.3f}/{}".format(batch_time.avg, len(gf)))
@@ -486,6 +487,7 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
                 s_lower_b, s_upper_b, check_other_cams, check_all_cams = handle_retry(f_rate=f_rate,
                     s_lower_b=s_lower_b, s_upper_b=s_upper_b, fallback_time=fallback_time,
                     check_other_cams=check_other_cams, check_all_cams=check_all_cams)
+                continue
             else:
                 print("match declared:", distmat[0][indices[0][0]])
                 # reset window, flag
