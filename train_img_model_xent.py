@@ -256,6 +256,30 @@ def read_image(img_path):
     img = transform_test(img)
     return img
 
+def check_exit(s_upper_b, exit_time):
+    if s_upper_b == exit_time:
+        print("could not find person, giving up!")
+        return True
+    return False
+
+def handle_retry(f_rate, s_lower_b, s_upper_b, fallback_time, check_other_cams, check_all_cams):
+    # revert to historical search
+    if not check_other_cams and s_upper_b == fallback_time:
+        print("now checking OTHER cameras!")
+        check_other_cams = True
+        s_lower_b = 0.
+        s_upper_b = f_rate * 2.
+    # extend window
+    else:
+        if check_other_cams and s_upper_b == fallback_time:
+            print("now checking ALL cameras!")
+            check_other_cams = False
+            check_all_cams = True
+        s_lower_b = s_upper_b
+        s_upper_b += (f_rate * 2.0)
+
+    return s_lower_b, s_upper_b, check_other_cams, check_all_cams
+
 def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
     batch_time = AverageMeter()
     
@@ -347,20 +371,20 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
                     fid += cam_offsets[camid]
 
                     if fid > (q_fid + s_lower_b) and fid <= (q_fid + s_upper_b):
-                        is_valid = False
+                        check_match = False
 
-                        # special case: historical search on skipped cameras
+                        # special case: hist. search on skipped cameras
                         if check_other_cams:
                             if camid not in corr_matrix[q_camid]:
-                                is_valid = True
+                                check_match = True
                         # search camera
                         elif check_all_cams or (camid in corr_matrix[q_camid]):
-                            is_valid = True
+                            check_match = True
                         # skip camera
                         else:
                             img_elim += 1
 
-                        if is_valid:
+                        if check_match:
                             g_names.append(img_name)
                             g_pids.append(pid)
                             g_camids.append(camid)
@@ -382,24 +406,14 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
                 # handle no candidate case
                 if len(imgs) == 0:
                     print("no candidates detected, skipping")
-                    # check exit condition
-                    if s_upper_b == exit_time:
-                        print("could not find person, giving up!")
+                    # check for exit
+                    if check_exit(s_upper_b=s_upper_b, exit_time=exit_time):
                         print("\nframes tracked: ", q_fids[q_idx], "-", q_fid)
                         break
-                    # revert to historical search
-                    if not check_other_cams and s_upper_b == fallback_time:
-                        print("now checking OTHER cameras!")
-                        check_other_cams = True
-                        s_lower_b = 0.
-                        s_upper_b = f_rate * 2.
-                    else: # extend window
-                        if check_other_cams and s_upper_b == fallback_time:
-                            print("now checking ALL cameras!")
-                            check_other_cams = False
-                            check_all_cams = True
-                        s_lower_b = s_upper_b
-                        s_upper_b += (f_rate * 2.0)
+                    # handle retry
+                    s_lower_b, s_upper_b, check_other_cams, check_all_cams = handle_retry(f_rate=f_rate,
+                        s_lower_b=s_lower_b, s_upper_b=s_upper_b, fallback_time=fallback_time,
+                        check_other_cams=check_other_cams, check_all_cams=check_all_cams)
                     continue
 
                 imgs = torch.stack(imgs, dim=0)
@@ -464,25 +478,14 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
             indices = np.argsort(distmat, axis=1)
             if distmat[0][indices[0][0]] > dist_thresh:
                 print("not close enough, waiting...", distmat[0][indices[0][0]])
-                # check exit condition
-                if s_upper_b == exit_time:
-                    print("could not find person, giving up!")
+                # check for exit
+                if check_exit(s_upper_b=s_upper_b, exit_time=exit_time):
                     print("\nframes tracked: ", q_fids[q_idx], "-", q_fid)
                     break
-                # revert to historical search
-                if not check_other_cams and s_upper_b == fallback_time:
-                    print("now checking OTHER cameras!")
-                    check_other_cams = True
-                    s_lower_b = 0.
-                    s_upper_b = f_rate * 2.
-                # extend window
-                else:
-                    if check_other_cams and s_upper_b == fallback_time:
-                        print("now checking ALL cameras!")
-                        check_other_cams = False
-                        check_all_cams = True
-                    s_lower_b = s_upper_b
-                    s_upper_b += (f_rate * 2.0)
+                # handle retry
+                s_lower_b, s_upper_b, check_other_cams, check_all_cams = handle_retry(f_rate=f_rate,
+                    s_lower_b=s_lower_b, s_upper_b=s_upper_b, fallback_time=fallback_time,
+                    check_other_cams=check_other_cams, check_all_cams=check_all_cams)
             else:
                 print("match declared:", distmat[0][indices[0][0]])
                 # reset window, flag
