@@ -333,6 +333,11 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
     tot_match_pres = 0
     tot_delay = 0.
 
+    tot_t_pos = 0
+    tot_f_pos = 0
+    tot_t_neg = 0
+    tot_f_neg = 0
+
     # execute queries
     for q_idx, (q_pid, q_camid, q_fid, q_name) in enumerate(zip(q_pids, q_camids, q_fids, q_names)):
 
@@ -357,6 +362,21 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
         q_img_seen_arr = []
         q_img_elim_arr = []
         q_delay_arr = []
+
+        t_pos = 0.
+        f_pos = 0.
+        t_neg = 0.
+        f_neg = 0.
+
+        num_inst = 0.
+
+        # count total num. of pos. examples
+        for idx in range(0, len(gallery)):
+            img_name, pid, camid, fid = gallery[idx]
+            fid += cam_offsets[camid]
+
+            if pid == q_pid and fid > q_fid:
+                num_inst += 1
 
         while q_iter >= 0:
             print("\nquery: (", q_idx, ",", q_iter, ")",
@@ -487,11 +507,19 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
             print("matches found (so far): {}".format(q_match_found))
             print("matches pres. (so far): {}".format(q_match_pres))
             print("delay (so far): {}".format(q_delay))
+            print("t_pos {}, f_neg {}".format(t_pos, f_neg))
+            print("t_pos {}, f_pos {}".format(t_pos, f_pos))
 
             # check for match
             indices = np.argsort(distmat, axis=1)
             if distmat[0][indices[0][0]] > dist_thresh:
                 print("not close enough, waiting...", distmat[0][indices[0][0]])
+                # set accuracy stats
+                if q_pids[q_idx] in g_pids[indices][0]:
+                    f_neg += 1.
+                else:
+                    t_neg += 1.
+
                 # check for exit
                 if check_exit(s_upper_b=s_upper_b, exit_time=exit_time):
                     print("\nframes tracked: ", q_fids[q_idx], "-", q_fid)
@@ -501,8 +529,15 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
                     s_lower_b=s_lower_b, s_upper_b=s_upper_b, fallback_time=fallback_time,
                     check_other_cams=check_other_cams, check_all_cams=check_all_cams)
                 continue
+
             else:
                 print("match declared:", distmat[0][indices[0][0]])
+                # set accuracy stats
+                if q_pids[q_idx] == g_pids[indices][0][0]:
+                    t_pos += 1.
+                else:
+                    f_pos += 1.
+
                 # reset window, flag
                 s_lower_b = 0.
                 s_upper_b = f_rate * 2.
@@ -531,6 +566,9 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
         print("matches found: {}".format(q_match_found))
         print("matches pres.: {}".format(q_match_pres))
         print("delay: {}".format(sum(q_delay_arr[:-1])))
+        print("num inst: {}".format(num_inst))
+        print("acc. (recall) {}".format(t_pos / num_inst))
+        print("acc. (precis) {}".format(t_pos / (t_pos + f_pos)))
 
         # update aggregate stats
         tot_img_seen += sum(q_img_seen_arr[:-1])
@@ -538,6 +576,10 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
         tot_match_found += q_match_found
         tot_match_pres  += q_match_pres
         tot_delay += sum(q_delay_arr[:-1])
+        tot_t_pos += t_pos
+        tot_f_pos += f_pos
+        tot_t_neg += t_neg
+        tot_f_neg += (num_inst - t_pos)
 
         print("\nAggregate results ----------")
         print("img seen: {}".format(tot_img_seen))
@@ -546,6 +588,8 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
         print("matches pres.: {}".format(tot_match_pres))
         print("delay (avg.): {}".format(tot_delay / (q_idx + 1)))
         print("mAP: {:.1%}".format(np.mean(all_AP)))
+        print("acc. (recall) {}".format(tot_t_pos / (tot_t_pos + tot_f_neg)))
+        print("acc. (precis) {}".format(tot_t_pos / (tot_t_pos + tot_f_pos)))
 
     min_len = min(map(len, all_cmc))
     all_cmc = [cmc[:min_len] for cmc in all_cmc]
