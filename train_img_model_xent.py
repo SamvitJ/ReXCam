@@ -354,6 +354,10 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
         q_match_pres = 0
         q_delay = 0.
 
+        q_img_seen_arr = []
+        q_img_elim_arr = []
+        q_delay_arr = []
+
         while q_iter >= 0:
             print("\nquery: (", q_idx, ",", q_iter, ")",
                 "pid: ", q_pid, "camid: ", q_camid, "frameid: ", q_fid, "name: ", q_name,
@@ -399,8 +403,12 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
                 imgs.append(read_image(path))
 
             # update delay
+            if len(q_delay_arr) <= q_iter:
+                q_delay_arr.append(0)
+
             if check_other_cams:
                 q_delay += 2.
+                q_delay_arr[q_iter] += 2.
 
             # handle no candidate case
             if len(imgs) == 0:
@@ -439,6 +447,11 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
             print("new gallery size: ", len(gf))
             q_img_seen += len(gf)
             q_img_elim += img_elim
+            if len(q_img_seen_arr) <= q_iter:
+                q_img_seen_arr.append(0)
+                q_img_elim_arr.append(0)
+            q_img_seen_arr[q_iter] += len(gf)
+            q_img_elim_arr[q_iter] += img_elim
 
             print("Extracted features for gallery set, obtained {}-by-{} matrix".format(gf.size(0), gf.size(1)))
             print("==> BatchTime(s)/BatchSize(img): {:.3f}/{}".format(batch_time.avg, len(gf)))
@@ -512,14 +525,19 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
                     features = model(next_img.unsqueeze(0))
                     qf_i = features.data.cpu()
 
+        print("\nFinal query {} stats ----------".format(q_idx))
+        print("img seen: {}".format(sum(q_img_seen_arr[:-1])))
+        print("img tot.: {}".format(sum(q_img_seen_arr[:-1] + q_img_elim_arr[:-1])))
+        print("matches found: {}".format(q_match_found))
+        print("matches pres.: {}".format(q_match_pres))
+        print("delay: {}".format(sum(q_delay_arr[:-1])))
+
         # update aggregate stats
-        tot_img_seen += q_img_seen
-        tot_img_elim += q_img_elim
+        tot_img_seen += sum(q_img_seen_arr[:-1])
+        tot_img_elim += sum(q_img_elim_arr[:-1])
         tot_match_found += q_match_found
         tot_match_pres  += q_match_pres
-        tot_delay += q_delay
-
-        mAP = np.mean(all_AP)
+        tot_delay += sum(q_delay_arr[:-1])
 
         print("\nAggregate results ----------")
         print("img seen: {}".format(tot_img_seen))
@@ -527,7 +545,7 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
         print("matches found: {}".format(tot_match_found))
         print("matches pres.: {}".format(tot_match_pres))
         print("delay (avg.): {}".format(tot_delay / (q_idx + 1)))
-        print("mAP: {:.1%}".format(mAP))
+        print("mAP: {:.1%}".format(np.mean(all_AP)))
 
     min_len = min(map(len, all_cmc))
     all_cmc = [cmc[:min_len] for cmc in all_cmc]
