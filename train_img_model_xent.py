@@ -560,12 +560,19 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
                 print("Next query (name, pid, cid, fid): ", q_name, q_pid, q_camid, q_fid)
 
                 # extract next img features
+                ori_w = 0.5
+                run_w = 0.0
+                new_w = 0.5
                 with torch.no_grad():
                     next_path = osp.normpath("data/dukemtmc-reid/DukeMTMC-reID/bounding_box_test/" + q_name)
                     next_img = read_image(next_path)
                     if use_gpu: next_img = next_img.cuda()
                     features = model(next_img.unsqueeze(0))
-                    qf_i = features.data.cpu()
+                    qf_i = (ori_w * qf_orig) + (run_w * qf_i) + (new_w * features.data.cpu())
+
+        # prevent div by 0
+        if num_inst == 0.:  num_inst += 1e-8
+        if t_pos == 0.:     t_pos += 1e-8
 
         print("\nFinal query {} stats ----------".format(q_idx))
         print("img seen: {}".format(sum(q_img_seen_arr[:-1])))
