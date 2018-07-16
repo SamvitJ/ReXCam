@@ -73,6 +73,9 @@ parser.add_argument('--start-eval', type=int, default=0, help="start to evaluate
 parser.add_argument('--save-dir', type=str, default='log')
 parser.add_argument('--use-cpu', action='store_true', help="use cpu")
 parser.add_argument('--gpu-devices', default='0', type=str, help='gpu device ids for CUDA_VISIBLE_DEVICES')
+# Hyperparams
+parser.add_argument('--orig-weight', type=float, default=1., help="weight on original query img features")
+parser.add_argument('--run-weight', type=float, default=0., help="weight on running average feature vector")
 
 args = parser.parse_args()
 
@@ -155,7 +158,13 @@ def main():
 
     if args.evaluate:
         print("Evaluate only")
-        test(model, queryloader, gallery, use_gpu)
+        for i in np.arange(0, 1.01, 0.1):
+            for j in np.arange(1. - i, -0.01, -0.1):
+                args.run_weight = i
+                args.orig_weight = j
+                print("\nWeights {:1.2f} {:1.2f} {:1.2f}:".format(
+                    args.orig_weight, args.run_weight, (1. - args.orig_weight - args.run_weight)))
+                test(model, queryloader, gallery, use_gpu)
         return
 
     start_time = time.time()
@@ -258,21 +267,21 @@ def read_image(img_path):
 
 def check_exit(s_upper_b, exit_time):
     if s_upper_b == exit_time:
-        print("could not find person, giving up!")
+        # print("could not find person, giving up!")
         return True
     return False
 
 def handle_retry(f_rate, s_lower_b, s_upper_b, fallback_time, check_other_cams, check_all_cams):
     # revert to historical search
     if not check_other_cams and s_upper_b == fallback_time:
-        print("now checking OTHER cameras!")
+        # print("now checking OTHER cameras!")
         check_other_cams = True
         s_lower_b = 0.
         s_upper_b = f_rate * 2.
     # extend window
     else:
         if check_other_cams and s_upper_b == fallback_time:
-            print("now checking ALL cameras!")
+            # print("now checking ALL cameras!")
             check_other_cams = False
             check_all_cams = True
         s_lower_b = s_upper_b
@@ -292,14 +301,14 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
 
     cam_offsets = [5542, 3606, 27243, 31181, 0, 22401, 18967, 46765]
     corr_matrix = [
-        [0, 1],
-        [0, 1, 2, 4],
-        [1, 2, 3, 4],
-        [2, 3],
-        [0, 1, 2, 4, 5, 6],
-        [4, 5, 6],
-        [4, 5, 6, 7],
-        [0, 6, 7]
+        [0, 1, 2, 3, 4, 5, 6, 7],
+        [0, 1, 2, 3, 4, 5, 6, 7],
+        [0, 1, 2, 3, 4, 5, 6, 7],
+        [0, 1, 2, 3, 4, 5, 6, 7],
+        [0, 1, 2, 3, 4, 5, 6, 7],
+        [0, 1, 2, 3, 4, 5, 6, 7],
+        [0, 1, 2, 3, 4, 5, 6, 7],
+        [0, 1, 2, 3, 4, 5, 6, 7]
     ]
 
     # process query images
@@ -326,9 +335,9 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
         q_camids = np.asarray(q_camids)
         q_fids = np.asarray(q_fids)
         q_names = np.asarray(q_names)
-        print("query imgs", q_names)
+        # print("query imgs", q_names)
 
-        print("Extracted features for query set, obtained {}-by-{} matrix".format(qf.size(0), qf.size(1)))
+        # print("Extracted features for query set, obtained {}-by-{} matrix".format(qf.size(0), qf.size(1)))
 
     all_cmc = []
     all_AP = []
@@ -346,11 +355,11 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
     tot_f_neg = 0
 
     # execute queries
-    for q_idx, (q_pid, q_camid, q_fid, q_name) in enumerate(zip(q_pids, q_camids, q_fids, q_names)):
+    for q_idx, (q_pid, q_camid, q_fid, q_name) in enumerate(zip(q_pids, q_camids, q_fids, q_names)[:100]):
 
-        print("\nnew query person ------------------------------------ ")
-        print("query id: ", q_idx, "pid: ", q_pid, "camid: ", q_camid,
-            "frameid: ", q_fid, "name: ", q_name)
+        # print("\nnew query person ------------------------------------ ")
+        # print("query id: ", q_idx, "pid: ", q_pid, "camid: ", q_camid,
+        #     "frameid: ", q_fid, "name: ", q_name)
 
         # query vars
         q_iter = 0
@@ -390,9 +399,9 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
                 num_inst += 1
 
         while q_iter >= 0:
-            print("\nquery: (", q_idx, ",", q_iter, ")",
-                "pid: ", q_pid, "camid: ", q_camid, "frameid: ", q_fid, "name: ", q_name,
-                "\twin: [", s_lower_b / f_rate, ",", s_upper_b / f_rate, "]")
+            # print("\nquery: (", q_idx, ",", q_iter, ")",
+            #     "pid: ", q_pid, "camid: ", q_camid, "frameid: ", q_fid, "name: ", q_name,
+            #     "\twin: [", s_lower_b / f_rate, ",", s_upper_b / f_rate, "]")
 
             img_elim = 0
 
@@ -443,10 +452,10 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
 
             # handle no candidate case
             if len(imgs) == 0:
-                print("no candidates detected, skipping")
+                # print("no candidates detected, skipping")
                 # check for exit
                 if check_exit(s_upper_b=s_upper_b, exit_time=exit_time):
-                    print("\nframes tracked: ", q_fids[q_idx], "-", q_fid)
+                    # print("\nframes tracked: ", q_fids[q_idx], "-", q_fid)
                     break
                 # handle retry
                 s_lower_b, s_upper_b, check_other_cams, check_all_cams = handle_retry(f_rate=f_rate,
@@ -474,8 +483,8 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
             g_fids = np.asarray(g_fids)
 
             # gallery pruning stats
-            print("eliminated: ", img_elim)
-            print("new gallery size: ", len(gf))
+            # print("eliminated: ", img_elim)
+            # print("new gallery size: ", len(gf))
             q_img_seen += len(gf)
             q_img_elim += img_elim
             if len(q_img_seen_arr) <= q_iter:
@@ -484,8 +493,8 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
             q_img_seen_arr[q_iter] += len(gf)
             q_img_elim_arr[q_iter] += img_elim
 
-            print("Extracted features for gallery set, obtained {}-by-{} matrix".format(gf.size(0), gf.size(1)))
-            print("==> BatchTime(s)/BatchSize(img): {:.3f}/{}".format(batch_time.avg, len(gf)))
+            # print("Extracted features for gallery set, obtained {}-by-{} matrix".format(gf.size(0), gf.size(1)))
+            # print("==> BatchTime(s)/BatchSize(img): {:.3f}/{}".format(batch_time.avg, len(gf)))
 
             # print("q_fids", q_fids)
             # print("g_fids", g_fids)
@@ -497,7 +506,7 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
             distmat.addmm_(1, -2, qf_i, gf.t())
             distmat = distmat.numpy()
 
-            print("Computing CMC and mAP")
+            # print("Computing CMC and mAP")
             cmc, AP, valid, f, p = evaluate(distmat, np.expand_dims(q_pid, axis=0), g_pids, np.expand_dims(q_camid, axis=0), g_camids,
                 use_metric_cuhk03=args.use_metric_cuhk03, img_names=g_names, g_a_pids=g_a_pids, g_a_camids=g_a_camids)
 
@@ -508,19 +517,19 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
                 q_match_found += f
                 q_match_pres  += p
 
-            print("mAP (so far): {:.1%}".format(np.mean(all_AP)))
-            print("img seen (so far): {}".format(q_img_seen))
-            print("img tot. (so far): {}".format(q_img_seen + q_img_elim))
-            print("matches found (so far): {}".format(q_match_found))
-            print("matches pres. (so far): {}".format(q_match_pres))
-            print("delay (so far): {}".format(q_delay))
-            print("t_pos {}, f_neg {}".format(t_pos, f_neg))
-            print("t_pos {}, f_pos {}".format(t_pos, f_pos))
+            # print("mAP (so far): {:.1%}".format(np.mean(all_AP)))
+            # print("img seen (so far): {}".format(q_img_seen))
+            # print("img tot. (so far): {}".format(q_img_seen + q_img_elim))
+            # print("matches found (so far): {}".format(q_match_found))
+            # print("matches pres. (so far): {}".format(q_match_pres))
+            # print("delay (so far): {}".format(q_delay))
+            # print("t_pos {}, f_neg {}".format(t_pos, f_neg))
+            # print("t_pos {}, f_pos {}".format(t_pos, f_pos))
 
             # check for match
             indices = np.argsort(distmat, axis=1)
             if distmat[0][indices[0][0]] > dist_thresh:
-                print("not close enough, waiting...", distmat[0][indices[0][0]])
+                # print("not close enough, waiting...", distmat[0][indices[0][0]])
                 # set accuracy stats
                 if q_pids[q_idx] in g_pids[indices][0]:
                     f_neg += 1.
@@ -529,7 +538,7 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
 
                 # check for exit
                 if check_exit(s_upper_b=s_upper_b, exit_time=exit_time):
-                    print("\nframes tracked: ", q_fids[q_idx], "-", q_fid)
+                    # print("\nframes tracked: ", q_fids[q_idx], "-", q_fid)
                     break
                 # handle retry
                 s_lower_b, s_upper_b, check_other_cams, check_all_cams = handle_retry(f_rate=f_rate,
@@ -538,7 +547,7 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
                 continue
 
             else:
-                print("match declared:", distmat[0][indices[0][0]])
+                # print("match declared:", distmat[0][indices[0][0]])
                 # set accuracy stats
                 if q_pids[q_idx] == g_pids[indices][0][0]:
                     t_pos += 1.
@@ -557,25 +566,28 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
                 q_camid = g_camids[indices][0][0]
                 q_fid = g_fids[indices][0][0]
                 q_name = g_names[indices][0][0]
-                print("Next query (name, pid, cid, fid): ", q_name, q_pid, q_camid, q_fid)
+                # print("Next query (name, pid, cid, fid): ", q_name, q_pid, q_camid, q_fid)
 
                 # extract next img features
+                ori_w = args.orig_weight
+                run_w = args.run_weight
+                new_w = (1. - ori_w - run_w)
                 with torch.no_grad():
                     next_path = osp.normpath("data/dukemtmc-reid/DukeMTMC-reID/bounding_box_test/" + q_name)
                     next_img = read_image(next_path)
                     if use_gpu: next_img = next_img.cuda()
                     features = model(next_img.unsqueeze(0))
-                    qf_i = features.data.cpu()
+                    qf_i = (ori_w * qf_orig) + (run_w * qf_i) + (new_w * features.data.cpu())
 
-        print("\nFinal query {} stats ----------".format(q_idx))
-        print("img seen: {}".format(sum(q_img_seen_arr[:-1])))
-        print("img tot.: {}".format(sum(q_img_seen_arr[:-1] + q_img_elim_arr[:-1])))
-        print("matches found: {}".format(q_match_found))
-        print("matches pres.: {}".format(q_match_pres))
-        print("delay: {}".format(sum(q_delay_arr[:-1])))
-        print("num inst: {}".format(num_inst))
-        print("acc. (recall) {}".format(t_pos / num_inst))
-        print("acc. (precis) {}".format(t_pos / (t_pos + f_pos)))
+        # print("\nFinal query {} stats ----------".format(q_idx))
+        # print("img seen: {}".format(sum(q_img_seen_arr[:-1])))
+        # print("img tot.: {}".format(sum(q_img_seen_arr[:-1] + q_img_elim_arr[:-1])))
+        # print("matches found: {}".format(q_match_found))
+        # print("matches pres.: {}".format(q_match_pres))
+        # print("delay: {}".format(sum(q_delay_arr[:-1])))
+        # print("num inst: {}".format(num_inst))
+        # print("acc. (recall) {}".format(t_pos / num_inst))
+        # print("acc. (precis) {}".format(t_pos / (t_pos + f_pos)))
 
         # update aggregate stats
         tot_img_seen += sum(q_img_seen_arr[:-1])
@@ -588,15 +600,15 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
         tot_t_neg += t_neg
         tot_f_neg += (num_inst - t_pos)
 
-        print("\nAggregate results ----------")
-        print("img seen: {}".format(tot_img_seen))
-        print("img tot.: {}".format(tot_img_seen + tot_img_elim))
-        print("matches found: {}".format(tot_match_found))
-        print("matches pres.: {}".format(tot_match_pres))
-        print("delay (avg.): {}".format(tot_delay / (q_idx + 1)))
-        print("mAP: {:.1%}".format(np.mean(all_AP)))
-        print("acc. (recall) {}".format(tot_t_pos / (tot_t_pos + tot_f_neg)))
-        print("acc. (precis) {}".format(tot_t_pos / (tot_t_pos + tot_f_pos)))
+    print("Aggregate results ----------")
+    print("img seen: {}".format(tot_img_seen))
+    print("img tot.: {}".format(tot_img_seen + tot_img_elim))
+    print("matches found: {}".format(tot_match_found))
+    print("matches pres.: {}".format(tot_match_pres))
+    print("delay (avg.): {}".format(tot_delay / (q_idx + 1)))
+    print("mAP: {:.1%}".format(np.mean(all_AP)))
+    print("acc. (recall) {}".format(tot_t_pos / (tot_t_pos + tot_f_neg)))
+    print("acc. (precis) {}".format(tot_t_pos / (tot_t_pos + tot_f_pos)))
 
     min_len = min(map(len, all_cmc))
     all_cmc = [cmc[:min_len] for cmc in all_cmc]

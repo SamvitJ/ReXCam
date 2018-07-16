@@ -80,11 +80,11 @@ def eval_market1501(distmat, q_pids, g_pids, q_camids, g_camids, max_rank,
     num_q, num_g = distmat.shape
     if num_g < max_rank:
         max_rank = num_g
-        print("Note: number of gallery samples is quite small, got {}".format(num_g))
+        # print("Note: number of gallery samples is quite small, got {}".format(num_g))
     indices = np.argsort(distmat, axis=1)
-    print("dist mat:", np.sort(distmat)[0][:5])
+    # print("dist mat:", np.sort(distmat)[0][:5])
     matches = (g_pids[indices] == q_pids[:, np.newaxis]).astype(np.int32)
-    print("all matches:", np.sum(matches))
+    # print("all matches:", np.sum(matches))
     # print("q_pids", q_pids)
     # print("g_pids", g_pids)
     if img_names is not None:
@@ -98,7 +98,7 @@ def eval_market1501(distmat, q_pids, g_pids, q_camids, g_camids, max_rank,
     tot_pres = 0
 
     for q_idx in range(num_q):
-        print("matches", matches[q_idx])
+        # print("matches", matches[q_idx])
 
         # get query pid and camid
         q_pid = q_pids[q_idx]
@@ -111,7 +111,7 @@ def eval_market1501(distmat, q_pids, g_pids, q_camids, g_camids, max_rank,
         num_found = np.sum(par_matches)
         num_pres  = np.sum(all_matches)
 
-        print("found:", num_found, "present:", num_pres)
+        # print("found:", num_found, "present:", num_pres)
         tot_found += num_found
         tot_pres  += num_pres
 
