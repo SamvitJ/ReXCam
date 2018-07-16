@@ -359,6 +359,10 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
         check_other_cams = False
         check_all_cams = False
 
+        # query features
+        qf_orig = qf[q_idx].unsqueeze(0)
+        qf_i = qf_orig
+
         # query stats
         q_img_seen = 0
         q_img_elim = 0
@@ -485,10 +489,6 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
 
             # print("q_fids", q_fids)
             # print("g_fids", g_fids)
-
-            # set query features, if first iter.
-            if q_iter == 0:
-                qf_i = qf[q_idx].unsqueeze(0)
 
             # compute dist matrix
             m, n = qf_i.size(0), gf.size(0)
