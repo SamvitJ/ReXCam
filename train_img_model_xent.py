@@ -570,10 +570,6 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
                     features = model(next_img.unsqueeze(0))
                     qf_i = (ori_w * qf_orig) + (run_w * qf_i) + (new_w * features.data.cpu())
 
-        # prevent div by 0
-        if num_inst == 0.:  num_inst += 1e-8
-        if t_pos == 0.:     t_pos += 1e-8
-
         print("\nFinal query {} stats ----------".format(q_idx))
         print("img seen: {}".format(sum(q_img_seen_arr[:-1])))
         print("img tot.: {}".format(sum(q_img_seen_arr[:-1] + q_img_elim_arr[:-1])))
@@ -581,8 +577,8 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
         print("matches pres.: {}".format(q_match_pres))
         print("delay: {}".format(sum(q_delay_arr[:-1])))
         print("num inst: {}".format(num_inst))
-        print("acc. (recall) {}".format(t_pos / num_inst))
-        print("acc. (precis) {}".format(t_pos / (t_pos + f_pos)))
+        print("acc. (recall) {:1.3f}".format(t_pos / (1e-8 + num_inst)))
+        print("acc. (precis) {:1.3f}".format(t_pos / (1e-8 + t_pos + f_pos)))
 
         # update aggregate stats
         tot_img_seen += sum(q_img_seen_arr[:-1])
