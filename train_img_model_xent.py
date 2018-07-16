@@ -24,6 +24,14 @@ from utils import AverageMeter, Logger, save_checkpoint
 from eval_metrics import evaluate
 from optimizers import init_optim
 
+import enum
+
+class CameraCheck(enum.Enum):
+    current = 0
+    primary = 1
+    skipped = 2
+    all = 3
+
 parser = argparse.ArgumentParser(description='Train image model with cross entropy loss')
 # Datasets
 parser.add_argument('--root', type=str, default='data', help="root path to data directory")
@@ -262,23 +270,26 @@ def check_exit(s_upper_b, exit_time):
         return True
     return False
 
-def handle_retry(f_rate, s_lower_b, s_upper_b, fallback_time, check_other_cams, check_all_cams):
+def handle_retry(f_rate, s_lower_b, s_upper_b, fallback_time, cam_check):
+    # switch from tracking to search mode
+    if cam_check == CameraCheck.current:
+        print("now switching to search mode!")
+        cam_check = CameraCheck.primary
     # revert to historical search
-    if not check_other_cams and s_upper_b == fallback_time:
+    elif cam_check == CameraCheck.primary and s_upper_b == fallback_time:
         print("now checking OTHER cameras!")
-        check_other_cams = True
+        cam_check = CameraCheck.skipped
         s_lower_b = 0.
         s_upper_b = f_rate * 2.
-    # extend window
+    # search next frame
     else:
-        if check_other_cams and s_upper_b == fallback_time:
+        if cam_check == CameraCheck.skipped and s_upper_b == fallback_time:
             print("now checking ALL cameras!")
-            check_other_cams = False
-            check_all_cams = True
+            cam_check = CameraCheck.all
         s_lower_b = s_upper_b
         s_upper_b += (f_rate * 2.0)
 
-    return s_lower_b, s_upper_b, check_other_cams, check_all_cams
+    return s_lower_b, s_upper_b, cam_check
 
 def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
     batch_time = AverageMeter()
@@ -356,8 +367,7 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
         q_iter = 0
         s_lower_b = 0.
         s_upper_b = f_rate * 2.
-        check_other_cams = False
-        check_all_cams = False
+        cam_check = CameraCheck.current
 
         # query features
         qf_orig = qf[q_idx].unsqueeze(0)
@@ -393,6 +403,7 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
             print("\nquery: (", q_idx, ",", q_iter, ")",
                 "pid: ", q_pid, "camid: ", q_camid, "frameid: ", q_fid, "name: ", q_name,
                 "\twin: [", s_lower_b / f_rate, ",", s_upper_b / f_rate, "]")
+            print("search mode: ", cam_check)
 
             img_elim = 0
 
@@ -409,14 +420,23 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
                 if fid > (q_fid + s_lower_b) and fid <= (q_fid + s_upper_b):
                     check_frame = False
 
-                    if check_other_cams:
+                    if cam_check == CameraCheck.all:
+                        # baseline: check all
+                        check_frame = True
+                    elif cam_check == CameraCheck.skipped:
                         # special case: hist. search on skipped cameras
                         if camid not in corr_matrix[q_camid]:
                             check_frame = True
-                    elif check_all_cams or (camid in corr_matrix[q_camid]):
-                        check_frame = True
-                    else:
-                        img_elim += 1
+                    elif cam_check == CameraCheck.primary:
+                        # pruned search
+                        if camid in corr_matrix[q_camid]:
+                            check_frame = True
+                        else:
+                            img_elim += 1
+                    elif cam_check == CameraCheck.current:
+                        # current cam
+                        if camid == q_camid:
+                            check_frame = True
 
                     if check_frame:
                         g_names.append(img_name)
@@ -437,7 +457,7 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
             if len(q_delay_arr) <= q_iter:
                 q_delay_arr.append(0)
 
-            if check_other_cams:
+            if cam_check == CameraCheck.skipped:
                 q_delay += 2.
                 q_delay_arr[q_iter] += 2.
 
@@ -449,9 +469,8 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
                     print("\nframes tracked: ", q_fids[q_idx], "-", q_fid)
                     break
                 # handle retry
-                s_lower_b, s_upper_b, check_other_cams, check_all_cams = handle_retry(f_rate=f_rate,
-                    s_lower_b=s_lower_b, s_upper_b=s_upper_b, fallback_time=fallback_time,
-                    check_other_cams=check_other_cams, check_all_cams=check_all_cams)
+                s_lower_b, s_upper_b, cam_check = handle_retry(f_rate=f_rate,
+                    s_lower_b=s_lower_b, s_upper_b=s_upper_b, fallback_time=fallback_time, cam_check=cam_check)
                 continue
 
             with torch.no_grad():
@@ -532,9 +551,8 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
                     print("\nframes tracked: ", q_fids[q_idx], "-", q_fid)
                     break
                 # handle retry
-                s_lower_b, s_upper_b, check_other_cams, check_all_cams = handle_retry(f_rate=f_rate,
-                    s_lower_b=s_lower_b, s_upper_b=s_upper_b, fallback_time=fallback_time,
-                    check_other_cams=check_other_cams, check_all_cams=check_all_cams)
+                s_lower_b, s_upper_b, cam_check = handle_retry(f_rate=f_rate,
+                    s_lower_b=s_lower_b, s_upper_b=s_upper_b, fallback_time=fallback_time, cam_check=cam_check)
                 continue
 
             else:
@@ -548,8 +566,7 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
                 # reset window, flag
                 s_lower_b = 0.
                 s_upper_b = f_rate * 2.
-                check_other_cams = False
-                check_all_cams = False
+                cam_check = CameraCheck.current
 
                 # find next query img
                 q_iter += 1
