@@ -6,6 +6,8 @@ import datetime
 import argparse
 import os.path as osp
 import numpy as np
+from PIL import Image
+import pdb
 
 import torch
 import torch.nn as nn
@@ -14,7 +16,7 @@ from torch.utils.data import DataLoader
 from torch.optim import lr_scheduler
 
 import data_manager
-from dataset_loader import ImageDataset
+from dataset_loader import ImageDataset, ImageDatasetLazy
 import transforms as T
 import models
 from losses import CrossEntropyLabelSmooth, TripletLoss, DeepSupervision
@@ -22,6 +24,8 @@ from utils import AverageMeter, Logger, save_checkpoint
 from eval_metrics import evaluate
 from samplers import RandomIdentitySampler
 from optimizers import init_optim
+
+from train_img_model_xent import test
 
 parser = argparse.ArgumentParser(description='Train image model with cross entropy loss and hard triplet loss')
 # Datasets
@@ -133,8 +137,8 @@ def main():
         pin_memory=pin_memory, drop_last=False,
     )
 
-    galleryloader = DataLoader(
-        ImageDataset(dataset.gallery, transform=transform_test),
+    gallery = ImageDatasetLazy(dataset.gallery, transform=transform_test)
+    galleryloader = DataLoader(gallery,
         batch_size=args.test_batch, shuffle=False, num_workers=args.workers,
         pin_memory=pin_memory, drop_last=False,
     )
@@ -162,7 +166,7 @@ def main():
 
     if args.evaluate:
         print("Evaluate only")
-        test(model, queryloader, galleryloader, use_gpu)
+        test(model, queryloader, gallery, use_gpu)
         return
 
     start_time = time.time()
@@ -180,7 +184,7 @@ def main():
         
         if (epoch+1) > args.start_eval and args.eval_step > 0 and (epoch+1) % args.eval_step == 0 or (epoch+1) == args.max_epoch:
             print("==> Test")
-            rank1 = test(model, queryloader, galleryloader, use_gpu)
+            rank1 = test(model, queryloader, gallery, use_gpu)
             is_best = rank1 > best_rank1
             if is_best:
                 best_rank1 = rank1
@@ -211,7 +215,7 @@ def train(epoch, model, criterion_xent, criterion_htri, optimizer, trainloader, 
     model.train()
 
     end = time.time()
-    for batch_idx, (imgs, pids, _) in enumerate(trainloader):
+    for batch_idx, (imgs, pids, _, _) in enumerate(trainloader):
         if use_gpu:
             imgs, pids = imgs.cuda(), pids.cuda()
 
@@ -254,8 +258,7 @@ def train(epoch, model, criterion_xent, criterion_htri, optimizer, trainloader, 
                    epoch+1, batch_idx+1, len(trainloader), batch_time=batch_time,
                    data_time=data_time, loss=losses))
 
-
-def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
+def test_htri(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
     batch_time = AverageMeter()
 
     model.eval()
