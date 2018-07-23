@@ -211,7 +211,7 @@ def train(epoch, model, criterion, optimizer, trainloader, use_gpu):
     model.train()
 
     end = time.time()
-    for batch_idx, (imgs, pids, _) in enumerate(trainloader):
+    for batch_idx, (imgs, pids, _, _) in enumerate(trainloader):
         if use_gpu:
             imgs, pids = imgs.cuda(), pids.cuda()
 
@@ -275,14 +275,14 @@ def handle_retry(f_rate, s_lower_b, s_upper_b, fallback_time, cam_check):
         print("now checking OTHER cameras!")
         cam_check = CameraCheck.skipped
         s_lower_b = 0.
-        s_upper_b = f_rate * 2.
+        s_upper_b = f_rate * 1.
     # search next frame
     else:
         if cam_check == CameraCheck.skipped and s_upper_b == fallback_time:
             print("now checking ALL cameras!")
             cam_check = CameraCheck.all
         s_lower_b = s_upper_b
-        s_upper_b += (f_rate * 2.0)
+        s_upper_b += (f_rate * 1.0)
 
     return s_lower_b, s_upper_b, cam_check
 
@@ -291,21 +291,35 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
     
     model.eval()
 
-    f_rate = 60.
-    dist_thresh = 160.
+    # choose dataset
+    duke_test_loc = "data/dukemtmc-reid/DukeMTMC-reID/bounding_box_test/"
+    msmt_test_loc = "data/msmt17/MSMT17_V1/test/"
+    test_loc = msmt_test_loc
+
+    f_rate = 1.
+    dist_thresh = 1.0E-14
     fallback_time = f_rate * 32
     exit_time = f_rate * 64
 
-    cam_offsets = [5542, 3606, 27243, 31181, 0, 22401, 18967, 46765]
+    cam_offsets = [0, 0, 0, 0, 0,
+                   0, 0, 0, 0, 0,
+                   0, 0, 0, 0, 0]
     corr_matrix = [
-        [0, 1],
-        [0, 1, 2, 4],
-        [1, 2, 3, 4],
-        [2, 3],
-        [0, 1, 2, 4, 5, 6],
-        [4, 5, 6],
-        [4, 5, 6, 7],
-        [0, 6, 7]
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
     ]
 
     # process query images
@@ -361,7 +375,7 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
         # query vars
         q_iter = 0
         s_lower_b = 0.
-        s_upper_b = f_rate * 2.
+        s_upper_b = f_rate * 1.
         cam_check = CameraCheck.primary
 
         # query features
@@ -441,7 +455,7 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
             # load images
             imgs = []
             for img_name in g_names:
-                path = osp.normpath("data/dukemtmc-reid/DukeMTMC-reID/bounding_box_test/" + img_name)
+                path = osp.normpath(test_loc + img_name.split('_')[0] + '/' + img_name)
                 imgs.append(read_image(path))
 
             # update delay
@@ -449,8 +463,8 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
                 q_delay_arr.append(0)
 
             if cam_check == CameraCheck.skipped:
-                q_delay += 2.
-                q_delay_arr[q_iter] += 2.
+                q_delay += 1.
+                q_delay_arr[q_iter] += 1.
 
             # handle no candidate case
             if len(imgs) == 0:
@@ -556,7 +570,7 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
 
                 # reset window, flag
                 s_lower_b = 0.
-                s_upper_b = f_rate * 2.
+                s_upper_b = f_rate * 1.
                 cam_check = CameraCheck.primary
 
                 # find next query img
@@ -572,7 +586,7 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
                 run_w = 0.0
                 new_w = 0.5
                 with torch.no_grad():
-                    next_path = osp.normpath("data/dukemtmc-reid/DukeMTMC-reID/bounding_box_test/" + q_name)
+                    next_path = osp.normpath(test_loc + q_name.split('_')[0] + '/' + q_name)
                     next_img = read_image(next_path)
                     if use_gpu: next_img = next_img.cuda()
                     features = model(next_img.unsqueeze(0))
