@@ -138,7 +138,8 @@ def main():
     )
 
     gallery = ImageDatasetLazy(dataset.gallery, transform=transform_test)
-    galleryloader = DataLoader(gallery,
+    galleryloader = DataLoader(
+        ImageDataset(dataset.gallery, transform=transform_test),
         batch_size=args.test_batch, shuffle=False, num_workers=args.workers,
         pin_memory=pin_memory, drop_last=False,
     )
@@ -184,7 +185,7 @@ def main():
         
         if (epoch+1) > args.start_eval and args.eval_step > 0 and (epoch+1) % args.eval_step == 0 or (epoch+1) == args.max_epoch:
             print("==> Test")
-            rank1 = test(model, queryloader, gallery, use_gpu)
+            rank1 = test_htri(model, queryloader, galleryloader, use_gpu)
             is_best = rank1 > best_rank1
             if is_best:
                 best_rank1 = rank1
