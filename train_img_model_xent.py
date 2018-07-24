@@ -211,7 +211,7 @@ def train(epoch, model, criterion, optimizer, trainloader, use_gpu):
     model.train()
 
     end = time.time()
-    for batch_idx, (imgs, pids, _, _) in enumerate(trainloader):
+    for batch_idx, (_, imgs, pids, _, _,) in enumerate(trainloader):
         if use_gpu:
             imgs, pids = imgs.cuda(), pids.cuda()
 
