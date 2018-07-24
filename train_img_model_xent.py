@@ -263,22 +263,22 @@ def read_image(img_path):
     img = transform_test(img)
     return img
 
-def check_exit(s_upper_b, exit_time):
-    if s_upper_b == exit_time:
+def check_exit(s_upper_b, camid, exit_times):
+    if s_upper_b >= exit_times[camid]:
         print("could not find person, giving up!")
         return True
     return False
 
-def handle_retry(f_rate, s_lower_b, s_upper_b, fallback_time, cam_check):
+def handle_retry(f_rate, camid, s_lower_b, s_upper_b, fallback_times, cam_check):
     # revert to historical search
-    if cam_check == CameraCheck.primary and s_upper_b == fallback_time:
+    if cam_check == CameraCheck.primary and s_upper_b == fallback_times[camid]:
         print("now checking OTHER cameras!")
         cam_check = CameraCheck.skipped
         s_lower_b = 0.
         s_upper_b = f_rate * 2.
     # search next frame
     else:
-        if cam_check == CameraCheck.skipped and s_upper_b == fallback_time:
+        if cam_check == CameraCheck.skipped and s_upper_b == fallback_times[camid]:
             print("now checking ALL cameras!")
             cam_check = CameraCheck.all
         s_lower_b = s_upper_b
@@ -293,8 +293,6 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
 
     f_rate = 60.
     dist_thresh = 160.
-    fallback_time = f_rate * 32
-    exit_time = f_rate * 64
 
     cam_offsets = [5542, 3606, 27243, 31181, 0, 22401, 18967, 46765]
     corr_matrix = [
@@ -307,6 +305,30 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
         [4, 5, 6, 7],
         [0, 6, 7]
     ]
+    fallback_times = [
+        40,
+        40,
+        40,
+        30,
+        70,
+        30,
+        30,
+        50
+    ]
+    exit_times = [
+        70,
+        90,
+        40 + 1,
+        50,
+        70 + 1,
+        30 + 1,
+        80,
+        50 + 1
+    ]
+    fallback_times = [x * f_rate for x in fallback_times]
+    exit_times = [x * f_rate for x in exit_times]
+    print('fallback_times', fallback_times)
+    print('exit_times', exit_times)
 
     # process query images
     with torch.no_grad():
@@ -352,7 +374,7 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
     tot_f_neg = 0
 
     # execute queries
-    for q_idx, (q_pid, q_camid, q_fid, q_name) in enumerate(zip(q_pids, q_camids, q_fids, q_names)):
+    for q_idx, (q_pid, q_camid, q_fid, q_name) in enumerate(zip(q_pids, q_camids, q_fids, q_names)[:5]):
 
         print("\nnew query person ------------------------------------ ")
         print("query id: ", q_idx, "pid: ", q_pid, "camid: ", q_camid,
@@ -456,12 +478,12 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
             if len(imgs) == 0:
                 print("no candidates detected, skipping")
                 # check for exit
-                if check_exit(s_upper_b=s_upper_b, exit_time=exit_time):
+                if check_exit(s_upper_b=s_upper_b, camid=q_camid, exit_times=exit_times):
                     print("\nframes tracked: ", q_fids[q_idx], "-", q_fid)
                     break
                 # handle retry
-                s_lower_b, s_upper_b, cam_check = handle_retry(f_rate=f_rate,
-                    s_lower_b=s_lower_b, s_upper_b=s_upper_b, fallback_time=fallback_time, cam_check=cam_check)
+                s_lower_b, s_upper_b, cam_check = handle_retry(f_rate=f_rate, camid=q_camid,
+                    s_lower_b=s_lower_b, s_upper_b=s_upper_b, fallback_times=fallback_times, cam_check=cam_check)
                 continue
 
             with torch.no_grad():
@@ -538,12 +560,12 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
                     t_neg += 1.
 
                 # check for exit
-                if check_exit(s_upper_b=s_upper_b, exit_time=exit_time):
+                if check_exit(s_upper_b=s_upper_b, camid=q_camid, exit_times=exit_times):
                     print("\nframes tracked: ", q_fids[q_idx], "-", q_fid)
                     break
                 # handle retry
-                s_lower_b, s_upper_b, cam_check = handle_retry(f_rate=f_rate,
-                    s_lower_b=s_lower_b, s_upper_b=s_upper_b, fallback_time=fallback_time, cam_check=cam_check)
+                s_lower_b, s_upper_b, cam_check = handle_retry(f_rate=f_rate, camid=q_camid,
+                    s_lower_b=s_lower_b, s_upper_b=s_upper_b, fallback_times=fallback_times, cam_check=cam_check)
                 continue
 
             else:
@@ -568,8 +590,8 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
                 print("Next query (name, pid, cid, fid): ", q_name, q_pid, q_camid, q_fid)
 
                 # extract next img features
-                ori_w = 0.5
-                run_w = 0.0
+                ori_w = 0.25
+                run_w = 0.25
                 new_w = 0.5
                 with torch.no_grad():
                     next_path = osp.normpath("data/dukemtmc-reid/DukeMTMC-reID/bounding_box_test/" + q_name)
