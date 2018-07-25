@@ -305,6 +305,19 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
         [4, 5, 6, 7],
         [0, 6, 7]
     ]
+    travel_times = [
+        [15, 40,  0,  0, 70,  0, 60, 60],
+        [40, 15, 10,  0, 30,  0, 90, 90],
+        [ 0, 20, 15, 40, 10,  0,  0,  0], #
+        [ 0, 40, 30, 15, 50,  0,  0,  0],
+        [70, 40, 60, 30, 15, 30, 10, 60],
+        [ 0,  0,  0,  0, 30, 15, 20,  0],
+        [80,  0,  0,  0, 20, 20, 15, 30],
+        [50, 30,  0,  0, 40,  0, 30, 15]
+    ]
+    travel_times = [[f_rate * x for x in y] for y in travel_times]
+    print("travel_times", travel_times)
+
     fallback_times = [
         40,
         40,
@@ -436,17 +449,23 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
 
                 if fid > (q_fid + s_lower_b) and fid <= (q_fid + s_upper_b):
                     check_frame = False
+                    included = fid <= (q_fid + travel_times[q_camid][camid])
 
                     if cam_check == CameraCheck.all:
                         # baseline: check all
-                        check_frame = True
+                        if included:
+                            check_frame = True
+                        else:
+                            img_elim += 1
                     elif cam_check == CameraCheck.skipped:
                         # special case: hist. search on skipped cameras
                         if camid not in corr_matrix[q_camid]:
-                            check_frame = True
+                            if included:
+                                check_frame = True
+                                img_elim -= 1
                     elif cam_check == CameraCheck.primary:
                         # pruned search
-                        if camid in corr_matrix[q_camid]:
+                        if camid in corr_matrix[q_camid] and included:
                             check_frame = True
                         else:
                             img_elim += 1
