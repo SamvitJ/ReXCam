@@ -32,12 +32,12 @@ class ImageDataset(Dataset):
         return len(self.dataset)
 
     def __getitem__(self, index):
-        img_path, pid, camid, fid = self.dataset[index]
+        img_path, pid, camid, fid, group = self.dataset[index]
         img = read_image(img_path)
         if self.transform is not None:
             img = self.transform(img)
         _, img_name = os.path.split(img_path)
-        return img_name, img, pid, camid, fid
+        return img_name, img, pid, camid, fid, group
 
 class ImageDatasetLazy(Dataset):
     """Image Person ReID Dataset"""
@@ -49,12 +49,12 @@ class ImageDatasetLazy(Dataset):
         return len(self.dataset)
 
     def __getitem__(self, index):
-        img_path, pid, camid, fid = self.dataset[index]
+        img_path, pid, camid, fid, group = self.dataset[index]
         # img = read_image(img_path)
         # if self.transform is not None:
         #     img = self.transform(img)
         _, img_name = os.path.split(img_path)
-        return img_name, pid, camid, fid
+        return img_name, pid, camid, fid, group
 
 class VideoDataset(Dataset):
     """Video Person ReID Dataset.

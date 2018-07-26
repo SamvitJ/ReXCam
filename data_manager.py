@@ -519,11 +519,12 @@ class MSMT17(object):
         for img_idx, img_info in enumerate(lines):
             img_path, pid = img_info.split(' ')
             pid = int(pid) # no need to relabel
+            group = img_path.split('_')[3]
             fid = int(img_path.split('_')[4])
             camid = int(img_path.split('_')[2])
             camid -= 1 # index starts from 0
             img_path = osp.join(dir_path, img_path)
-            dataset.append((img_path, pid, camid, fid))
+            dataset.append((img_path, pid, camid, fid, group))
             pid_container.add(pid)
         num_imgs = len(dataset)
         num_pids = len(pid_container)

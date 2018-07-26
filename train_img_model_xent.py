@@ -324,8 +324,8 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
 
     # process query images
     with torch.no_grad():
-        qf, q_pids, q_camids, q_fids, q_names = [], [], [], [], []
-        for batch_idx, (names, imgs, pids, camids, fids) in enumerate(queryloader):
+        qf, q_pids, q_camids, q_fids, q_names, q_groups = [], [], [], [], [], []
+        for batch_idx, (names, imgs, pids, camids, fids, groups) in enumerate(queryloader):
             if use_gpu: imgs = imgs.cuda()
 
             # adjust frame ids
@@ -341,11 +341,13 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
             q_camids.extend(camids)
             q_names.extend(names)
             q_fids.extend(fids)
+            q_groups.extend(groups)
         qf = torch.cat(qf, 0)
         q_pids = np.asarray(q_pids)
         q_camids = np.asarray(q_camids)
         q_fids = np.asarray(q_fids)
         q_names = np.asarray(q_names)
+        q_groups = np.asarray(q_groups)
         print("query imgs", q_names)
 
         print("Extracted features for query set, obtained {}-by-{} matrix".format(qf.size(0), qf.size(1)))
@@ -366,11 +368,11 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
     tot_f_neg = 0
 
     # execute queries
-    for q_idx, (q_pid, q_camid, q_fid, q_name) in enumerate(zip(q_pids, q_camids, q_fids, q_names)):
+    for q_idx, (q_pid, q_camid, q_fid, q_name, q_group) in enumerate(zip(q_pids, q_camids, q_fids, q_names, q_groups)):
 
         print("\nnew query person ------------------------------------ ")
         print("query id: ", q_idx, "pid: ", q_pid, "camid: ", q_camid,
-            "frameid: ", q_fid, "name: ", q_name)
+            "frameid: ", q_fid, "group: ", q_group, "name: ", q_name)
 
         # query vars
         q_iter = 0
@@ -402,10 +404,10 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
 
         # count total num. of pos. examples
         for idx in range(0, len(gallery)):
-            img_name, pid, camid, fid = gallery[idx]
+            img_name, pid, camid, fid, group = gallery[idx]
             fid += cam_offsets[camid]
 
-            if pid == q_pid and fid > q_fid:
+            if pid == q_pid and group == q_group and fid > q_fid:
                 num_inst += 1
 
         while q_iter >= 0:
@@ -421,12 +423,12 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
 
             # load gallery
             for idx in range(0, len(gallery)):
-                img_name, pid, camid, fid = gallery[idx]
+                img_name, pid, camid, fid, group = gallery[idx]
 
                 # adjust frame id
                 fid += cam_offsets[camid]
 
-                if fid > (q_fid + s_lower_b) and fid <= (q_fid + s_upper_b):
+                if group == q_group and fid > (q_fid + s_lower_b) and fid <= (q_fid + s_upper_b):
                     check_frame = False
 
                     if cam_check == CameraCheck.all:
