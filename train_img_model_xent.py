@@ -293,19 +293,19 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
 
     f_rate = 60.
     dist_thresh = 160.
-    fallback_time = f_rate * 32
-    exit_time = f_rate * 64
+    fallback_time = f_rate * 30
+    exit_time = f_rate * 70
 
     cam_offsets = [5542, 3606, 27243, 31181, 0, 22401, 18967, 46765]
     corr_matrix = [
-        [0, 1],
-        [0, 1, 2, 4],
-        [1, 2, 3, 4],
-        [2, 3],
-        [0, 1, 2, 4, 5, 6],
-        [4, 5, 6],
-        [4, 5, 6, 7],
-        [0, 6, 7]
+        [0, 1, 2, 3, 4, 5, 6, 7],
+        [0, 1, 2, 3, 4, 5, 6, 7],
+        [0, 1, 2, 3, 4, 5, 6, 7],
+        [0, 1, 2, 3, 4, 5, 6, 7],
+        [0, 1, 2, 3, 4, 5, 6, 7],
+        [0, 1, 2, 3, 4, 5, 6, 7],
+        [0, 1, 2, 3, 4, 5, 6, 7],
+        [0, 1, 2, 3, 4, 5, 6, 7]
     ]
 
     # process query images
