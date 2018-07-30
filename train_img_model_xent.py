@@ -305,10 +305,20 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
         [5, 6, 7],
         [0, 6, 7]
     ]
+    start_times = [
+        [ 0, 10,  0,  0, 40,  0, 30, 20],
+        [10,  0,  0,  0,  5,  0, 25, 10],
+        [ 0,  0,  0,  5,  0,  0,  0,  0], # ..., 375, 690, 0]
+        [ 0, 30,  5,  0, 15,  0,  0,  0],
+        [30,  5,  0, 20,  0,  5,  0, 15],
+        [ 0,  0,  0,  0,  5,  0,  5,  0],
+        [40,  0,  0,  0,  0,  0,  0, 10],
+        [10,  5,  0,  0, 10,  0, 10,  0]
+    ]
     travel_times = [
         [ 6, 80,  0,  0, 70,  0, 60, 60],
         [40,  6, 10,  0, 30,  0, 90, 90],
-        [ 0, 20,  6, 40, 10,  0,  0,  0], #
+        [ 0, 20,  6, 40, 10,  0,  0,  0], # ..., 380, 700, 0]
         [ 0, 40, 30,  6, 50,  0,  0,  0],
         [70,120, 60, 30,  6, 30, 10, 60],
         [ 0,  0,  0,  0, 40,  6, 20,  0],
@@ -449,7 +459,8 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
 
                 if fid > (q_fid + s_lower_b) and fid <= (q_fid + s_upper_b):
                     check_frame = False
-                    included = fid <= (q_fid + travel_times[q_camid][camid])
+                    included = fid <= (q_fid + travel_times[q_camid][camid]) and \
+                        fid >= (q_fid + start_times[q_camid][camid])
 
                     if cam_check == CameraCheck.all:
                         # baseline: check all
