@@ -271,14 +271,14 @@ def check_exit(s_upper_b, camid, exit_times):
 
 def handle_retry(f_rate, camid, s_lower_b, s_upper_b, fallback_times, cam_check):
     # revert to historical search
-    if cam_check == CameraCheck.primary and s_upper_b == fallback_times[camid]:
+    if cam_check == CameraCheck.primary and s_upper_b >= fallback_times[camid]:
         print("now checking OTHER cameras!")
         cam_check = CameraCheck.skipped
         s_lower_b = 0.
         s_upper_b = f_rate * 2.
     # search next frame
     else:
-        if cam_check == CameraCheck.skipped and s_upper_b == fallback_times[camid]:
+        if cam_check == CameraCheck.skipped and s_upper_b >= fallback_times[camid]:
             print("now checking ALL cameras!")
             cam_check = CameraCheck.all
         s_lower_b = s_upper_b
@@ -316,37 +316,37 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
         [10,  5,  0,  0, 10,  0, 10,  0]
     ]
     travel_times = [
-        [ 6, 80,  0,  0, 70,  0, 60, 60],
-        [40,  6, 10,  0, 30,  0, 90, 90],
+        [ 6, 75,  0,  0, 70,  0, 55, 55],
+        [40,  6, 10,  0, 30,  0, 90, 85],
         [ 0, 20,  6, 40, 10,  0,  0,  0], # ..., 380, 700, 0]
-        [ 0, 40, 30,  6, 50,  0,  0,  0],
-        [70,120, 60, 30,  6, 30, 10, 60],
-        [ 0,  0,  0,  0, 40,  6, 20,  0],
-        [80,  0,  0,  0, 20, 50,  6, 40],
-        [60, 30,  0,  0, 40,  0, 30,  6]
+        [ 0, 35, 30,  6, 45,  0,  0,  0],
+        [65,115, 55, 30,  6, 25, 10, 55],
+        [ 0,  0,  0,  0, 40,  6, 15,  0],
+        [80,  0,  0,  0, 15, 50,  6, 35],
+        [55, 25,  0,  0, 40,  0, 30,  6]
     ]
     travel_times = [[f_rate * x for x in y] for y in travel_times]
     print("travel_times", travel_times)
 
     fallback_times = [
-        80,
+        75,
         40,
         40,
         30,
-        120,
+        115,
         40,
         50,
-        60
+        55
     ]
     exit_times = [
-        80 + 1,
+        75 + 1,
         90,
         40 + 1,
-        50,
-        120 + 1,
+        45,
+        115 + 1,
         40 + 1,
         80,
-        60 + 1
+        55 + 1
     ]
     fallback_times = [x * f_rate for x in fallback_times]
     exit_times = [x * f_rate for x in exit_times]
