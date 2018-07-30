@@ -263,28 +263,35 @@ def read_image(img_path):
     img = transform_test(img)
     return img
 
-def check_exit(s_upper_b, camid, exit_times):
-    if s_upper_b >= exit_times[camid]:
-        print("could not find person, giving up!")
-        return True
-    return False
-
-def handle_retry(f_rate, camid, s_lower_b, s_upper_b, fallback_times, cam_check):
-    # revert to historical search
-    if cam_check == CameraCheck.primary and s_upper_b >= fallback_times[camid]:
-        print("now checking OTHER cameras!")
-        cam_check = CameraCheck.skipped
-        s_lower_b = 0.
-        s_upper_b = f_rate * 2.
-    # search next frame
-    else:
-        if cam_check == CameraCheck.skipped and s_upper_b >= fallback_times[camid]:
+def check_exit_retry(f_rate, camid, s_lower_b, s_upper_b, fallback_times, exit_times, cam_check):
+    to_exit = False
+    check_next = True
+    if cam_check == CameraCheck.primary:
+        if s_upper_b >= fallback_times[camid]:
+            print("now checking OTHER cameras!")
+            cam_check = CameraCheck.skipped
+            s_lower_b = 0.
+            s_upper_b = f_rate * 2.
+            check_next = False
+    elif cam_check == CameraCheck.skipped:
+        if s_upper_b >= exit_times[camid]:
+            print("could not find person, giving up!")
+            to_exit = True
+            check_next = False
+        elif s_upper_b >= fallback_times[camid]:
             print("now checking ALL cameras!")
             cam_check = CameraCheck.all
+    elif cam_check == CameraCheck.all:
+        if s_upper_b >= exit_times[camid]:
+            print("could not find person, giving up!")
+            to_exit = True
+            check_next = False
+
+    if check_next:
         s_lower_b = s_upper_b
         s_upper_b += (f_rate * 2.0)
 
-    return s_lower_b, s_upper_b, cam_check
+    return to_exit, s_lower_b, s_upper_b, cam_check
 
 def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
     batch_time = AverageMeter()
@@ -339,14 +346,14 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
         55
     ]
     exit_times = [
-        75 + 1,
+        75,
         90,
-        40 + 1,
+        40,
         45,
-        115 + 1,
-        40 + 1,
+        115,
+        40,
         80,
-        55 + 1
+        55
     ]
     fallback_times = [x * f_rate for x in fallback_times]
     exit_times = [x * f_rate for x in exit_times]
@@ -507,14 +514,16 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
             # handle no candidate case
             if len(imgs) == 0:
                 print("no candidates detected, skipping")
-                # check for exit
-                if check_exit(s_upper_b=s_upper_b, camid=q_camid, exit_times=exit_times):
+
+                # check exit / retry
+                exit, s_lower_b, s_upper_b, cam_check = check_exit_retry(f_rate=f_rate, camid=q_camid,
+                    s_lower_b=s_lower_b, s_upper_b=s_upper_b, fallback_times=fallback_times, exit_times=exit_times,
+                    cam_check=cam_check)
+                if exit:
                     print("\nframes tracked: ", q_fids[q_idx], "-", q_fid)
                     break
-                # handle retry
-                s_lower_b, s_upper_b, cam_check = handle_retry(f_rate=f_rate, camid=q_camid,
-                    s_lower_b=s_lower_b, s_upper_b=s_upper_b, fallback_times=fallback_times, cam_check=cam_check)
-                continue
+                else:
+                    continue
 
             with torch.no_grad():
                 imgs = torch.stack(imgs, dim=0)
@@ -588,15 +597,15 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
                     f_neg += 1.
                 else:
                     t_neg += 1.
-
-                # check for exit
-                if check_exit(s_upper_b=s_upper_b, camid=q_camid, exit_times=exit_times):
+                # check exit / retry
+                exit, s_lower_b, s_upper_b, cam_check = check_exit_retry(f_rate=f_rate, camid=q_camid,
+                    s_lower_b=s_lower_b, s_upper_b=s_upper_b, fallback_times=fallback_times, exit_times=exit_times,
+                    cam_check=cam_check)
+                if exit:
                     print("\nframes tracked: ", q_fids[q_idx], "-", q_fid)
                     break
-                # handle retry
-                s_lower_b, s_upper_b, cam_check = handle_retry(f_rate=f_rate, camid=q_camid,
-                    s_lower_b=s_lower_b, s_upper_b=s_upper_b, fallback_times=fallback_times, cam_check=cam_check)
-                continue
+                else:
+                    continue
 
             else:
                 print("match declared:", distmat[0][indices[0][0]])
