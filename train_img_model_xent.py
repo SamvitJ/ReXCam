@@ -387,7 +387,7 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
     tot_f_neg = 0
 
     # execute queries
-    for q_idx, (q_pid, q_camid, q_fid, q_name) in enumerate(zip(q_pids, q_camids, q_fids, q_names)[:5]):
+    for q_idx, (q_pid, q_camid, q_fid, q_name) in enumerate(zip(q_pids, q_camids, q_fids, q_names)[:100]):
 
         print("\nnew query person ------------------------------------ ")
         print("query id: ", q_idx, "pid: ", q_pid, "camid: ", q_camid,
@@ -609,8 +609,8 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
                 print("Next query (name, pid, cid, fid): ", q_name, q_pid, q_camid, q_fid)
 
                 # extract next img features
-                ori_w = 0.25
-                run_w = 0.25
+                ori_w = 0.5
+                run_w = 0.
                 new_w = 0.5
                 with torch.no_grad():
                     next_path = osp.normpath("data/dukemtmc-reid/DukeMTMC-reID/bounding_box_test/" + q_name)
