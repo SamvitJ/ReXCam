@@ -264,21 +264,21 @@ def read_image(img_path):
     return img
 
 def check_exit(s_upper_b, exit_time):
-    if s_upper_b == exit_time:
+    if s_upper_b >= exit_time:
         print("could not find person, giving up!")
         return True
     return False
 
 def handle_retry(f_rate, s_lower_b, s_upper_b, fallback_time, cam_check):
     # revert to historical search
-    if cam_check == CameraCheck.primary and s_upper_b == fallback_time:
+    if cam_check == CameraCheck.primary and s_upper_b >= fallback_time:
         print("now checking OTHER cameras!")
         cam_check = CameraCheck.skipped
         s_lower_b = 0.
         s_upper_b = f_rate * 2.
     # search next frame
     else:
-        if cam_check == CameraCheck.skipped and s_upper_b == fallback_time:
+        if cam_check == CameraCheck.skipped and s_upper_b >= fallback_time:
             print("now checking ALL cameras!")
             cam_check = CameraCheck.all
         s_lower_b = s_upper_b
@@ -294,7 +294,7 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
     f_rate = 60.
     dist_thresh = 160.
     fallback_time = f_rate * 30
-    exit_time = f_rate * 70
+    exit_time = f_rate * 67.75
 
     cam_offsets = [5542, 3606, 27243, 31181, 0, 22401, 18967, 46765]
     corr_matrix = [
