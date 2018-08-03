@@ -305,7 +305,7 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
     corr_matrix = [
         [0, 1],
         [0, 1, 2, 4],
-        [1, 2, 3],
+        [1, 2, 3, 4],
         [2, 3],
         [1, 2, 4, 5],
         [4, 5, 6],
@@ -313,52 +313,54 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
         [0, 6, 7]
     ]
     start_times = [
-        [ 0, 10,  0,  0, 40,  0, 30, 20],
+        [ 0, 10,  0,  0, 45,  0,  0, 20],
         [10,  0,  0,  0,  5,  0, 25, 10],
-        [ 0,  0,  0,  5,  0,  0,  0,  0], # ..., 375, 690, 0]
-        [ 0, 30,  5,  0, 15,  0,  0,  0],
-        [30,  5,  0, 20,  0,  5,  0, 15],
-        [ 0,  0,  0,  0,  5,  0,  5,  0],
-        [40,  0,  0,  0,  0,  0,  0, 10],
-        [10,  5,  0,  0, 10,  0, 10,  0]
+        [ 0,  5,  0,  5,  0,  0,  0,  0],
+        [ 0, 30, 10,  0, 20,  0,  0,  0],
+        [40,  5,  0, 20,  0, 10,  0, 25],
+        [ 0,  0,  0,  0, 10,  0,  5,  0],
+        [ 0,  0,  0,  0,  0,  0,  0, 10],
+        [10,  5,  0,  0, 20,  0, 10,  0]
     ]
     travel_times = [
-        [ 6, 75,  0,  0, 70,  0, 55, 55],
-        [40,  6, 10,  0, 30,  0, 90, 85],
-        [ 0, 20,  6, 40, 10,  0,  0,  0], # ..., 380, 700, 0]
-        [ 0, 35, 30,  6, 45,  0,  0,  0],
-        [65,115, 55, 30,  6, 25, 10, 55],
-        [ 0,  0,  0,  0, 40,  6, 15,  0],
-        [80,  0,  0,  0, 15, 50,  6, 35],
-        [55, 25,  0,  0, 40,  0, 30,  6]
+        [ 6, 35,  0,  0, 70,  0,  0, 45],
+        [40,  6, 15,  0, 30,  0, 30, 30],
+        [ 0, 15,  6, 25, 10,  0,  0,  0],
+        [ 0, 35, 30,  6, 30,  0,  0,  0],
+        [55, 55, 10, 30,  6, 50, 10, 35],
+        [ 0,  0,  0,  0, 20,  6, 10,  0],
+        [ 0,  0,  0,  0, 15, 20,  6, 35],
+        [40, 20,  0,  0, 40,  0,185,  6]
     ]
     travel_times = [[f_rate * x for x in y] for y in travel_times]
     print("travel_times", travel_times)
 
     fallback_times = [
-        75,
+        35,
         40,
-        40,
+        25,
         30,
-        115,
-        40,
-        50,
-        55
+        55,
+        20,
+        35,
+       185
     ]
     exit_times = [
-        75,
-        90,
+        70,
         40,
-        45,
-        115,
-        40,
-        80,
-        55
+        25,
+        35,
+        55,
+        20,
+        35,
+       185
     ]
     fallback_times = [x * f_rate for x in fallback_times]
     exit_times = [x * f_rate for x in exit_times]
     print('fallback_times', fallback_times)
     print('exit_times', exit_times)
+
+    first_trisect = 108980
 
     # process query images
     with torch.no_grad():
@@ -368,6 +370,12 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
 
             # adjust frame ids
             fids += torch.LongTensor([cam_offsets[cid] for cid in camids])
+
+            names = [n for n,f in zip(names, fids) if f < first_trisect]
+            imgs = torch.from_numpy(np.stack([i for i,f in zip(imgs, fids) if f < first_trisect]))
+            pids = [p for p,f in zip(pids, fids) if f < first_trisect]
+            camids = [c for c,f in zip(camids, fids) if f < first_trisect]
+            fids = [f for f in fids if f < first_trisect]
 
             end = time.time()
             features = model(imgs)
@@ -384,7 +392,7 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
         q_camids = np.asarray(q_camids)
         q_fids = np.asarray(q_fids)
         q_names = np.asarray(q_names)
-        print("query imgs", q_names)
+        print("query imgs", len(q_names))
 
         print("Extracted features for query set, obtained {}-by-{} matrix".format(qf.size(0), qf.size(1)))
 
@@ -443,6 +451,10 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
             img_name, pid, camid, fid = gallery[idx]
             fid += cam_offsets[camid]
 
+            # skip gallery frames not in first third
+            if fid >= first_trisect:
+                continue
+
             if pid == q_pid and fid > q_fid:
                 num_inst += 1
 
@@ -463,6 +475,10 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
 
                 # adjust frame id
                 fid += cam_offsets[camid]
+
+                # skip gallery frames not in first third
+                if fid >= first_trisect:
+                    continue
 
                 if fid > (q_fid + s_lower_b) and fid <= (q_fid + s_upper_b):
                     check_frame = False
