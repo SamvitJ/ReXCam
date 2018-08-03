@@ -418,7 +418,8 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
 
         # query features
         qf_orig = qf[q_idx].unsqueeze(0)
-        qf_i = qf_orig
+        qf_last = qf_orig
+        qf_i = torch.cat([qf_orig, qf_last], 0)
 
         # query stats
         q_img_seen = 0
@@ -567,6 +568,7 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
                       torch.pow(gf, 2).sum(dim=1, keepdim=True).expand(n, m).t()
             distmat.addmm_(1, -2, qf_i, gf.t())
             distmat = distmat.numpy()
+            distmat = 0.5 * np.expand_dims(np.sum(distmat, axis=0), 0)
 
             print("Computing CMC and mAP")
             cmc, AP, valid, f, p = evaluate(distmat, np.expand_dims(q_pid, axis=0), g_pids, np.expand_dims(q_camid, axis=0), g_camids,
@@ -629,15 +631,13 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
                 print("Next query (name, pid, cid, fid): ", q_name, q_pid, q_camid, q_fid)
 
                 # extract next img features
-                ori_w = 0.5
-                run_w = 0.
-                new_w = 0.5
                 with torch.no_grad():
                     next_path = osp.normpath("data/dukemtmc-reid/DukeMTMC-reID/bounding_box_test/" + q_name)
                     next_img = read_image(next_path)
                     if use_gpu: next_img = next_img.cuda()
                     features = model(next_img.unsqueeze(0))
-                    qf_i = (ori_w * qf_orig) + (run_w * qf_i) + (new_w * features.data.cpu())
+                    qf_last = features.data.cpu()
+                    qf_i = torch.cat([qf_orig, qf_last], 0)
 
         print("\nFinal query {} stats ----------".format(q_idx))
         print("img seen: {}".format(sum(q_img_seen_arr[:-1])))
