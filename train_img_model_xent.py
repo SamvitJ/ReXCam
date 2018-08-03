@@ -308,6 +308,8 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
         [0, 1, 2, 3, 4, 5, 6, 7]
     ]
 
+    first_trisect = 108980
+
     # process query images
     with torch.no_grad():
         qf, q_pids, q_camids, q_fids, q_names = [], [], [], [], []
@@ -316,6 +318,12 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
 
             # adjust frame ids
             fids += torch.LongTensor([cam_offsets[cid] for cid in camids])
+
+            names = [n for n,f in zip(names, fids) if f < first_trisect]
+            imgs = torch.from_numpy(np.stack([i for i,f in zip(imgs, fids) if f < first_trisect]))
+            pids = [p for p,f in zip(pids, fids) if f < first_trisect]
+            camids = [c for c,f in zip(camids, fids) if f < first_trisect]
+            fids = [f for f in fids if f < first_trisect]
 
             end = time.time()
             features = model(imgs)
@@ -332,7 +340,7 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
         q_camids = np.asarray(q_camids)
         q_fids = np.asarray(q_fids)
         q_names = np.asarray(q_names)
-        print("query imgs", q_names)
+        print("query imgs", len(q_names))
 
         print("Extracted features for query set, obtained {}-by-{} matrix".format(qf.size(0), qf.size(1)))
 
@@ -391,6 +399,10 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
             img_name, pid, camid, fid = gallery[idx]
             fid += cam_offsets[camid]
 
+            # skip gallery frames not in first third
+            if fid >= first_trisect:
+                continue
+
             if pid == q_pid and fid > q_fid:
                 num_inst += 1
 
@@ -411,6 +423,10 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
 
                 # adjust frame id
                 fid += cam_offsets[camid]
+
+                # skip gallery frames not in first third
+                if fid >= first_trisect:
+                    continue
 
                 if fid > (q_fid + s_lower_b) and fid <= (q_fid + s_upper_b):
                     check_frame = False
