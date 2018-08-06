@@ -615,6 +615,13 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
                 else:
                     f_pos += 1.
 
+                # update delay
+                if cam_check == CameraCheck.skipped:
+                    lag = (fallback_times[q_camid] - s_upper_b) / f_rate
+                    print("Now resuming tracking, adding", lag ,"seconds delay")
+                    q_delay += lag
+                    q_delay_arr[q_iter] += lag
+
                 # reset window, flag
                 s_lower_b = 0.
                 s_upper_b = f_rate * 2.
