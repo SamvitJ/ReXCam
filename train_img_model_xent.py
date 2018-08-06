@@ -312,49 +312,10 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
         [5, 6, 7],
         [0, 6, 7]
     ]
-    start_times = [
-        [ 0, 10,  0,  0, 40,  0, 30, 20],
-        [10,  0,  0,  0,  5,  0, 25, 10],
-        [ 0,  0,  0,  5,  0,  0,  0,  0], # ..., 375, 690, 0]
-        [ 0, 30,  5,  0, 15,  0,  0,  0],
-        [30,  5,  0, 20,  0,  5,  0, 15],
-        [ 0,  0,  0,  0,  5,  0,  5,  0],
-        [40,  0,  0,  0,  0,  0,  0, 10],
-        [10,  5,  0,  0, 10,  0, 10,  0]
-    ]
-    travel_times = [
-        [ 6, 75,  0,  0, 70,  0, 55, 55],
-        [40,  6, 10,  0, 30,  0, 90, 85],
-        [ 0, 20,  6, 40, 10,  0,  0,  0], # ..., 380, 700, 0]
-        [ 0, 35, 30,  6, 45,  0,  0,  0],
-        [65,115, 55, 30,  6, 25, 10, 55],
-        [ 0,  0,  0,  0, 40,  6, 15,  0],
-        [80,  0,  0,  0, 15, 50,  6, 35],
-        [55, 25,  0,  0, 40,  0, 30,  6]
-    ]
-    travel_times = [[f_rate * x for x in y] for y in travel_times]
-    print("travel_times", travel_times)
 
-    fallback_times = [
-        75,
-        40,
-        40,
-        30,
-        115,
-        40,
-        50,
-        55
-    ]
-    exit_times = [
-        75,
-        90,
-        40,
-        45,
-        115,
-        40,
-        80,
-        55
-    ]
+    fallback_times = [57.5, 57.5, 57.5, 57.5, 57.5, 57.5, 57.5, 57.5]
+    exit_times = [70, 70, 70, 70, 70, 70, 70, 70]
+
     fallback_times = [x * f_rate for x in fallback_times]
     exit_times = [x * f_rate for x in exit_times]
     print('fallback_times', fallback_times)
@@ -466,8 +427,7 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
 
                 if fid > (q_fid + s_lower_b) and fid <= (q_fid + s_upper_b):
                     check_frame = False
-                    included = fid <= (q_fid + travel_times[q_camid][camid]) and \
-                        fid >= (q_fid + start_times[q_camid][camid])
+                    included = True
 
                     if cam_check == CameraCheck.all:
                         # baseline: check all
