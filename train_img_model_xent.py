@@ -372,11 +372,11 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
             # adjust frame ids
             fids += torch.LongTensor([cam_offsets[cid] for cid in camids])
 
-            names = [n for n,f in zip(names, fids) if f >= third_trisect]
-            imgs = torch.from_numpy(np.stack([i for i,f in zip(imgs, fids) if f >= third_trisect]))
-            pids = [p for p,f in zip(pids, fids) if f >= third_trisect]
-            camids = [c for c,f in zip(camids, fids) if f >= third_trisect]
-            fids = [f for f in fids if f >= third_trisect]
+            names = [n for n,f in zip(names, fids) if f < first_trisect]
+            imgs = torch.from_numpy(np.stack([i for i,f in zip(imgs, fids) if f < first_trisect]))
+            pids = [p for p,f in zip(pids, fids) if f < first_trisect]
+            camids = [c for c,f in zip(camids, fids) if f < first_trisect]
+            fids = [f for f in fids if f < first_trisect]
 
             end = time.time()
             features = model(imgs)
@@ -453,7 +453,7 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
             fid += cam_offsets[camid]
 
             # skip gallery frames not in last third
-            if not(fid >= third_trisect):
+            if fid >= first_trisect:
                 continue
 
             if pid == q_pid and fid > q_fid:
@@ -478,7 +478,7 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
                 fid += cam_offsets[camid]
 
                 # skip gallery frames not in last third
-                if not(fid >= third_trisect):
+                if fid >= first_trisect:
                     continue
 
                 if fid > (q_fid + s_lower_b) and fid <= (q_fid + s_upper_b):
