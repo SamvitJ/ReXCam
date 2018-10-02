@@ -341,19 +341,19 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
         25,
         25,
         45,
-        50,
-        65,
+        30,
+        30,
         45
     ]
     exit_times = [
-        75,
+        70,
         60,
         45,
-        60,
-        60,
-        75,
-        65,
-        55
+        40,
+        55,
+        30,
+        30,
+        45
     ]
     fallback_times = [x * f_rate for x in fallback_times]
     exit_times = [x * f_rate for x in exit_times]
