@@ -294,7 +294,7 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
     f_rate = 60.
     dist_thresh = 160.
     fallback_time = f_rate * 30
-    exit_time = f_rate * 67.75
+    exit_time = f_rate * 46.875
 
     cam_offsets = [5542, 3606, 27243, 31181, 0, 22401, 18967, 46765]
     corr_matrix = [
