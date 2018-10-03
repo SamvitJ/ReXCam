@@ -394,6 +394,7 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
 
     tot_img_seen = 0
     tot_img_elim = 0
+    tot_num_inst = 0
     tot_match_found = 0
     tot_match_pres = 0
     tot_delay = 0.
@@ -649,16 +650,17 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
         print("\nFinal query {} stats ----------".format(q_idx))
         print("img seen: {}".format(sum(q_img_seen_arr[:-1])))
         print("img tot.: {}".format(sum(q_img_seen_arr[:-1] + q_img_elim_arr[:-1])))
+        print("num inst: {}".format(num_inst))
         print("matches found: {}".format(q_match_found))
         print("matches pres.: {}".format(q_match_pres))
         print("delay: {}".format(sum(q_delay_arr[:-1])))
-        print("num inst: {}".format(num_inst))
         print("acc. (recall) {:1.3f}".format(t_pos / (1e-8 + num_inst)))
         print("acc. (precis) {:1.3f}".format(t_pos / (1e-8 + t_pos + f_pos)))
 
         # update aggregate stats
         tot_img_seen += sum(q_img_seen_arr[:-1])
         tot_img_elim += sum(q_img_elim_arr[:-1])
+        tot_num_inst += num_inst
         tot_match_found += q_match_found
         tot_match_pres  += q_match_pres
         tot_delay += sum(q_delay_arr[:-1])
@@ -670,6 +672,7 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
         print("\nAggregate results ----------")
         print("img seen: {}".format(tot_img_seen))
         print("img tot.: {}".format(tot_img_seen + tot_img_elim))
+        print("num inst.: {}".format(tot_num_inst))
         print("matches found: {}".format(tot_match_found))
         print("matches pres.: {}".format(tot_match_pres))
         print("delay (avg.): {}".format(tot_delay / (q_idx + 1)))
