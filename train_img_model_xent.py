@@ -526,6 +526,7 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
                 else:
                     continue
 
+            # gallery features
             with torch.no_grad():
                 imgs = torch.stack(imgs, dim=0)
                 if use_gpu: imgs = imgs.cuda()
@@ -558,9 +559,6 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
 
             print("Extracted features for gallery set, obtained {}-by-{} matrix".format(gf.size(0), gf.size(1)))
             print("==> BatchTime(s)/BatchSize(img): {:.3f}/{}".format(batch_time.avg, len(gf)))
-
-            # print("q_fids", q_fids)
-            # print("g_fids", g_fids)
 
             # compute dist matrix
             m, n = qf_i.size(0), gf.size(0)
