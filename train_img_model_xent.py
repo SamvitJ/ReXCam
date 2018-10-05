@@ -622,8 +622,8 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
         print("matches pres.: {}".format(tot_match_pres))
         print("delay (avg.): {}".format(tot_delay / (q_idx + 1)))
         print("mAP: {:.1%}".format(np.mean(all_AP)))
-        print("acc. (recall) {}".format(tot_t_pos / (tot_t_pos + tot_f_neg)))
-        print("acc. (precis) {}".format(tot_t_pos / (tot_t_pos + tot_f_pos)))
+        print("acc. (recall) {}".format(tot_t_pos / (1e-8 + tot_t_pos + tot_f_neg)))
+        print("acc. (precis) {}".format(tot_t_pos / (1e-8 + tot_t_pos + tot_f_pos)))
 
     min_len = min(map(len, all_cmc))
     all_cmc = [cmc[:min_len] for cmc in all_cmc]
