@@ -298,8 +298,9 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
 
     f_rate = 1.
     dist_thresh = 140
-    fallback_time = f_rate * 32
-    exit_time = f_rate * 64
+    dist_thresh_adj = -120
+    fallback_time = f_rate * 10
+    exit_time = f_rate * 20
 
     cam_offsets = [0, 0, 0, 0, 0,
                    0, 0, 0, 0, 0,
@@ -342,6 +343,8 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
             q_names.extend(names)
             q_fids.extend(fids)
             q_groups.extend(groups)
+            if len(q_names) >= 100:
+                break
         qf = torch.cat(qf, 0)
         q_pids = np.asarray(q_pids)
         q_camids = np.asarray(q_camids)
@@ -368,7 +371,7 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
     tot_f_neg = 0
 
     # execute queries
-    for q_idx, (q_pid, q_camid, q_fid, q_name, q_group) in enumerate(zip(q_pids, q_camids, q_fids, q_names, q_groups)):
+    for q_idx, (q_pid, q_camid, q_fid, q_name, q_group) in enumerate(zip(q_pids, q_camids, q_fids, q_names, q_groups)[:50]):
 
         print("\nnew query person ------------------------------------ ")
         print("query id: ", q_idx, "pid: ", q_pid, "camid: ", q_camid,
@@ -419,6 +422,7 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
             img_elim = 0
 
             gf, g_pids, g_camids, g_fids, g_names = [], [], [], [], []
+            pf, p_a_names, p_a_pids, p_a_camids = [], [], [], []
             g_a_pids, g_a_camids = [], []
 
             # load gallery
@@ -428,6 +432,13 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
                 # adjust frame id
                 fid += cam_offsets[camid]
 
+                # current time step
+                if group == q_group and fid == q_fid and cid != q_camid:
+                    p_a_names.append(img_name)
+                    p_a_pids.append(pid)
+                    p_a_camids.append(camid)
+
+                # next time step
                 if group == q_group and fid > (q_fid + s_lower_b) and fid <= (q_fid + s_upper_b):
                     check_frame = False
 
@@ -454,11 +465,17 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
                     g_a_pids.append(pid)
                     g_a_camids.append(camid)
 
+            print("p_names", p_a_names)
+
             # load images
             imgs = []
+            p_imgs = []
             for img_name in g_names:
                 path = osp.normpath(test_loc + img_name.split('_')[0] + '/' + img_name)
                 imgs.append(read_image(path))
+            for img_name in p_a_names:
+                path = osp.normpath(test_loc + img_name.split('_')[0] + '/' + img_name)
+                p_imgs.append(read_image(path))
 
             # update delay
             if len(q_delay_arr) <= q_iter:
@@ -493,12 +510,30 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
                 gf.append(features.data.cpu())
                 gf = torch.cat(gf, 0)
 
+            # probe features
+            if len(p_imgs) > 0:
+                with torch.no_grad():
+                    p_imgs = torch.stack(p_imgs, dim=0)
+                    if use_gpu: p_imgs = p_imgs.cuda()
+
+                    # extract features
+                    end = time.time()
+                    features = model(p_imgs)
+                    batch_time.update(time.time() - end)
+
+                    pf.append(features.data.cpu())
+                    pf = torch.cat(pf, 0)
+                    print("pf size", pf.size())
+
             g_a_pids = np.asarray(g_a_pids)
             g_a_camids = np.asarray(g_a_camids)
             g_pids = np.asarray(g_pids)
             g_camids = np.asarray(g_camids)
             g_names = np.asarray(g_names)
             g_fids = np.asarray(g_fids)
+
+            p_a_pids = np.asarray(p_a_pids)
+            p_a_camids = np.asarray(p_a_camids)
 
             # gallery pruning stats
             print("eliminated: ", img_elim)
@@ -515,14 +550,22 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
             print("==> BatchTime(s)/BatchSize(img): {:.3f}/{}".format(batch_time.avg, len(gf)))
 
             # compute dist matrix
-            m, n = qf_i.size(0), gf.size(0)
-            distmat = torch.pow(qf_i, 2).sum(dim=1, keepdim=True).expand(m, n) + \
+            if len(p_imgs) > 0:
+                qpf = torch.cat((qf_i, pf), 0)
+            else:
+                qpf = qf_i
+
+            m, n = qpf.size(0), gf.size(0)
+            distmat = torch.pow(qpf, 2).sum(dim=1, keepdim=True).expand(m, n) + \
                       torch.pow(gf, 2).sum(dim=1, keepdim=True).expand(n, m).t()
-            distmat.addmm_(1, -2, qf_i, gf.t())
+            distmat.addmm_(1, -2, qpf, gf.t())
             distmat = distmat.numpy()
 
             print("Computing CMC and mAP")
-            cmc, AP, valid, f, p = evaluate(distmat, np.expand_dims(q_pid, axis=0), g_pids, np.expand_dims(q_camid, axis=0), g_camids,
+            q_pid_exp = np.expand_dims(q_pid, 0)
+            q_camid_exp = np.expand_dims(q_camid, 0)
+            distmat_exp = np.expand_dims(distmat[0], 0)
+            cmc, AP, valid, f, p = evaluate(distmat_exp, q_pid_exp, g_pids, q_camid_exp, g_camids,
                 use_metric_cuhk03=args.use_metric_cuhk03, img_names=g_names, g_a_pids=g_a_pids, g_a_camids=g_a_camids)
 
             if valid == 1:
@@ -541,12 +584,30 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
             print("t_pos {}, f_neg {}".format(t_pos, f_neg))
             print("t_pos {}, f_pos {}".format(t_pos, f_pos))
 
+            # compute adjusted dist
+            def adjust_dist(arr):
+                if len(arr) > 1:
+                    return arr[0] - (sum(arr[1:]) / len(arr[1:]))
+                else:
+                    return arr[0]
+
             # check for match
-            indices = np.argsort(distmat, axis=1)
-            if distmat[0][indices[0][0]] > dist_thresh:
-                print("not close enough, waiting...", distmat[0][indices[0][0]])
+            distmat_adj = np.apply_along_axis(adjust_dist, 0, distmat)
+            indices_adj = np.argsort(distmat_adj, axis=0)
+            print("g_names", g_names[indices_adj][:5])
+            print("matches (adj)", (g_pids[indices_adj] == q_pid).astype(np.int32))
+            min_idx = indices_adj[0]
+
+            if len(p_imgs) == 0:
+                thresh = dist_thresh
+            else:
+                thresh = dist_thresh_adj
+            print("thresh", thresh)
+
+            if distmat_adj[min_idx] > thresh:
+                print("not close enough, waiting...", distmat_adj[min_idx])
                 # set accuracy stats
-                if q_pids[q_idx] in g_pids[indices][0]:
+                if q_pids[q_idx] in g_pids[indices_adj]:
                     f_neg += 1.
                 else:
                     t_neg += 1.
@@ -561,9 +622,9 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
                 continue
 
             else:
-                print("match declared:", distmat[0][indices[0][0]])
+                print("match declared:", distmat_adj[min_idx])
                 # set accuracy stats
-                if q_pids[q_idx] == g_pids[indices][0][0]:
+                if q_pids[q_idx] == g_pids[indices_adj][0]:
                     t_pos += 1.
                 else:
                     f_pos += 1.
@@ -575,10 +636,10 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
 
                 # find next query img
                 q_iter += 1
-                q_pid = g_pids[indices][0][0]
-                q_camid = g_camids[indices][0][0]
-                q_fid = g_fids[indices][0][0]
-                q_name = g_names[indices][0][0]
+                q_pid = g_pids[indices_adj][0]
+                q_camid = g_camids[indices_adj][0]
+                q_fid = g_fids[indices_adj][0]
+                q_name = g_names[indices_adj][0]
                 print("Next query (name, pid, cid, fid): ", q_name, q_pid, q_camid, q_fid)
 
                 # extract next img features
