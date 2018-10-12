@@ -363,7 +363,7 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
     test_loc = msmt_test_loc
 
     f_rate = 1.
-    dist_thresh = 140
+    dist_thresh = 200
     dist_thresh_adj = -120
     fallback_time = f_rate * 10
     exit_time = f_rate * 20
