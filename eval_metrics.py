@@ -102,7 +102,7 @@ def eval_market1501(distmat, q_pids, g_pids, q_camids, g_camids, max_rank,
 
         # get query pid and camid
         q_pid = q_pids[q_idx]
-        q_camid = q_camids[q_idx]
+        # q_camid = q_camids[q_idx]
 
         # check frac of matches retained
         par_matches = [(g_pids[i]   == q_pid) for i in range(len(g_pids))]

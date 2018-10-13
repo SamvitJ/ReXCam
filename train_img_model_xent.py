@@ -363,8 +363,8 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
     test_loc = msmt_test_loc
 
     f_rate = 1.
-    dist_thresh = 200
-    dist_thresh_adj = -120
+    dist_thresh = 120
+    dist_thresh_adj = -50
     fallback_time = f_rate * 10
     exit_time = f_rate * 20
 
@@ -451,7 +451,7 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
 
         # query features
         qf_orig = qf[q_idx].unsqueeze(0)
-        qf_i = qf_orig
+        qf_i = torch.cat((qf_orig, qf_orig), 0)
 
         # query stats
         q_img_seen = 0
@@ -628,8 +628,8 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
             distmat = distmat.numpy()
 
             print("Computing CMC and mAP")
-            q_pid_exp = np.expand_dims(q_pid, 0)
-            q_camid_exp = np.expand_dims(q_camid, 0)
+            q_pid_exp = np.expand_dims(q_pids[q_idx], 0)
+            q_camid_exp = np.expand_dims(q_camids[q_idx], 0)
             distmat_exp = np.expand_dims(distmat[0], 0)
             cmc, AP, valid, f, p = evaluate(distmat_exp, q_pid_exp, g_pids, q_camid_exp, g_camids,
                 use_metric_cuhk03=args.use_metric_cuhk03, img_names=g_names, g_a_pids=g_a_pids, g_a_camids=g_a_camids)
@@ -652,16 +652,18 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
 
             # compute adjusted dist
             def adjust_dist(arr):
-                if len(arr) > 1:
-                    return arr[0] - (sum(arr[1:]) / len(arr[1:]))
+                ori_w = 0.5
+                new_w = 0.5
+                if len(arr) > 2:
+                    return ((ori_w * arr[0]) + (new_w * arr[1])) / 2. - (sum(arr[2:]) / len(arr[2:]))
                 else:
-                    return arr[0]
+                    return ((ori_w * arr[0]) + (new_w * arr[1])) / 2.
 
             # check for match
             distmat_adj = np.apply_along_axis(adjust_dist, 0, distmat)
             indices_adj = np.argsort(distmat_adj, axis=0)
             print("g_names", g_names[indices_adj][:5])
-            print("matches (adj)", (g_pids[indices_adj] == q_pid).astype(np.int32))
+            print("matches (adj)", (g_pids[indices_adj] == q_pids[q_idx]).astype(np.int32))
             min_idx = indices_adj[0]
 
             if len(p_imgs) == 0:
@@ -709,15 +711,12 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
                 print("Next query (name, pid, cid, fid): ", q_name, q_pid, q_camid, q_fid)
 
                 # extract next img features
-                ori_w = 0.5
-                run_w = 0.0
-                new_w = 0.5
                 with torch.no_grad():
                     next_path = osp.normpath(test_loc + q_name.split('_')[0] + '/' + q_name)
                     next_img = read_image(next_path)
                     if use_gpu: next_img = next_img.cuda()
                     features = model(next_img.unsqueeze(0))
-                    qf_i = (ori_w * qf_orig) + (run_w * qf_i) + (new_w * features.data.cpu())
+                    qf_i[1] = features.data.cpu()
 
         print("\nFinal query {} stats ----------".format(q_idx))
         print("img seen: {}".format(sum(q_img_seen_arr[:-1])))
