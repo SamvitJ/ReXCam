@@ -409,7 +409,7 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
             q_names.extend(names)
             q_fids.extend(fids)
             q_groups.extend(groups)
-            if len(q_names) >= 100:
+            if len(q_names) >= 200:
                 break
         qf = torch.cat(qf, 0)
         q_pids = np.asarray(q_pids)
@@ -437,7 +437,7 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
     tot_f_neg = 0
 
     # execute queries
-    for q_idx, (q_pid, q_camid, q_fid, q_name, q_group) in enumerate(zip(q_pids, q_camids, q_fids, q_names, q_groups)[:50]):
+    for q_idx, (q_pid, q_camid, q_fid, q_name, q_group) in enumerate(zip(q_pids, q_camids, q_fids, q_names, q_groups)[:100]):
 
         print("\nnew query person ------------------------------------ ")
         print("query id: ", q_idx, "pid: ", q_pid, "camid: ", q_camid,
