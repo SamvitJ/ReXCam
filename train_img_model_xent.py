@@ -718,6 +718,12 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
                     features = model(next_img.unsqueeze(0))
                     qf_i[1] = features.data.cpu()
 
+        # include exit stats if only 1 query instance
+        if len(q_img_seen_arr) == 1:
+            q_img_seen_arr.append(0)
+            q_img_elim_arr.append(0)
+            q_delay_arr.append(0)
+
         print("\nFinal query {} stats ----------".format(q_idx))
         print("img seen: {}".format(sum(q_img_seen_arr[:-1])))
         print("img tot.: {}".format(sum(q_img_seen_arr[:-1] + q_img_elim_arr[:-1])))
