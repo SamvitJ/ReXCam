@@ -515,6 +515,7 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
                         # special case: hist. search on skipped cameras
                         if camid not in corr_matrix[q_camid]:
                             check_frame = True
+                            img_elim -= 1
                     elif cam_check == CameraCheck.primary:
                         # pruned search
                         if camid in corr_matrix[q_camid]:
