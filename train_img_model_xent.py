@@ -303,11 +303,11 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
 
     cam_offsets = [5542, 3606, 27243, 31181, 0, 22401, 18967, 46765]
     corr_matrix = [
-        [0, 1, 7],
+        [0, 1],
         [0, 1, 2, 4],
-        [0, 1, 2, 3, 4],
-        [2, 3, 4],
-        [0, 1, 2, 4, 5],
+        [1, 2, 3],
+        [2, 3],
+        [1, 2, 4, 5],
         [4, 5, 6],
         [5, 6, 7],
         [0, 6, 7]
@@ -336,11 +336,11 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
     print("end times", end_times)
 
     fallback_times = [
-        70,
-        60,
         45,
-        40,
-        55,
+        60,
+        25,
+        25,
+        45,
         30,
         30,
         45
