@@ -293,8 +293,8 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
 
     f_rate = 60.
     dist_thresh = 160.
-    fallback_time = f_rate * 30
-    exit_time = f_rate * 58.75
+    fallback_time = f_rate * 45
+    exit_time = f_rate * 75
 
     cam_prefix = 1000000
 
