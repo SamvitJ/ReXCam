@@ -342,7 +342,7 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
         25,
         25,
         45,
-        30,
+        40,
         65,
         45
     ]
