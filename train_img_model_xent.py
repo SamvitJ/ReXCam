@@ -498,11 +498,11 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
                 # adjust frame id
                 fid += cam_offsets[camid]
 
-                # current time step
-                if group == q_group and fid == q_fid and cid != q_camid:
-                    p_a_names.append(img_name)
-                    p_a_pids.append(pid)
-                    p_a_camids.append(camid)
+                # # current time step
+                # if group == q_group and fid == q_fid and cid != q_camid:
+                #     p_a_names.append(img_name)
+                #     p_a_pids.append(pid)
+                #     p_a_camids.append(camid)
 
                 # next time step
                 if group == q_group and fid > (q_fid + s_lower_b) and fid <= (q_fid + s_upper_b):
