@@ -163,7 +163,7 @@ def main():
     if args.evaluate:
         print("Evaluate only")
         gallery = ImageDatasetLazy(dataset.gallery, transform=transform_test)
-        test(model, queryloader, gallery, use_gpu)
+        test(model, queryloader, gallery, use_gpu, corr_filter=True)
         return
 
     start_time = time.time()
@@ -352,7 +352,7 @@ def test_orig(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20]):
 
     return cmc[0]
 
-def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
+def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20], corr_filter=False):
     batch_time = AverageMeter()
     
     model.eval()
@@ -506,22 +506,25 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20]):
 
                 # next time step
                 if group == q_group and fid > (q_fid + s_lower_b) and fid <= (q_fid + s_upper_b):
-                    check_frame = False
+                    check_frame = True
 
-                    if cam_check == CameraCheck.all:
-                        # baseline: check all
-                        check_frame = True
-                    elif cam_check == CameraCheck.skipped:
-                        # special case: hist. search on skipped cameras
-                        if camid not in corr_matrix[q_camid]:
+                    if corr_filter == True:
+                        check_frame = False
+
+                        if cam_check == CameraCheck.all:
+                            # baseline: check all
                             check_frame = True
-                            img_elim -= 1
-                    elif cam_check == CameraCheck.primary:
-                        # pruned search
-                        if camid in corr_matrix[q_camid]:
-                            check_frame = True
-                        else:
-                            img_elim += 1
+                        elif cam_check == CameraCheck.skipped:
+                            # special case: hist. search on skipped cameras
+                            if camid not in corr_matrix[q_camid]:
+                                check_frame = True
+                                img_elim -= 1
+                        elif cam_check == CameraCheck.primary:
+                            # pruned search
+                            if camid in corr_matrix[q_camid]:
+                                check_frame = True
+                            else:
+                                img_elim += 1
 
                     if check_frame:
                         g_names.append(img_name)
