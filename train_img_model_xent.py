@@ -163,7 +163,7 @@ def main():
     if args.evaluate:
         print("Evaluate only")
         gallery = ImageDatasetLazy(dataset.gallery, transform=transform_test)
-        test(model, queryloader, gallery, use_gpu, corr_filter=True)
+        test(model, queryloader, gallery, use_gpu, corr_filter=False)
         return
 
     start_time = time.time()
