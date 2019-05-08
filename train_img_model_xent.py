@@ -417,7 +417,7 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20], corr_filter
         q_fids = np.asarray(q_fids)
         q_names = np.asarray(q_names)
         q_groups = np.asarray(q_groups)
-        print("query imgs", q_names)
+        print("query imgs", q_names[:3])
 
         print("Extracted features for query set, obtained {}-by-{} matrix".format(qf.size(0), qf.size(1)))
 
@@ -472,12 +472,17 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20], corr_filter
         num_inst = 0.
 
         # count total num. of pos. examples
+        fids = set()
         for idx in range(0, len(gallery)):
             img_name, pid, camid, fid, group = gallery[idx]
             fid += cam_offsets[camid]
 
             if pid == q_pid and group == q_group and fid > q_fid:
-                num_inst += 1
+                # print(img_name)
+                fids.add(fid)
+
+        num_inst += len(fids)
+        print("num inst", num_inst)
 
         while q_iter >= 0:
             print("\nquery: (", q_idx, ",", q_iter, ")",
