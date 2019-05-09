@@ -540,7 +540,7 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20], corr_filter
                     g_a_pids.append(pid)
                     g_a_camids.append(camid)
 
-            print("p_names", p_a_names)
+            # print("p_a_names", p_a_names)
 
             # load images
             imgs = []
@@ -679,7 +679,7 @@ def test(model, queryloader, gallery, use_gpu, ranks=[1, 5, 10, 20], corr_filter
                 thresh = dist_thresh
             else:
                 thresh = dist_thresh_adj
-            print("thresh", thresh)
+            # print("thresh", thresh)
 
             if distmat_adj[min_idx] > thresh:
                 print("not close enough, waiting...", distmat_adj[min_idx])
