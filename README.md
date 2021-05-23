@@ -6,3 +6,5 @@ This repository contains reseach code associated with the following two papers:
 - Samvit Jain, Xun Zhang, Yuhao Zhou, Ganesh Ananthanarayanan, Junchen Jiang, Yuanchao Shu, Paramvir Bahl, Joseph E. Gonzalez. Spatula: Efficient Cross-Camera Video Analytics on Large Camera Networks. In: ACM/IEEE Symposium on Edge Computing (ACM/IEEE SEC), 2020. [pdf](https://www.microsoft.com/en-us/research/uploads/prod/2020/08/sec20spatula.pdf)
 
 This project is built on top of a [person re-identification framework](https://github.com/KaiyangZhou/deep-person-reid). Please see that project for up-to-date code and models. 
+
+This work was done at Microsoft Research and the University of California, Berkeley.
